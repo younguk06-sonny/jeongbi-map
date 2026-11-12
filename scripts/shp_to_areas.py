@@ -41,7 +41,8 @@ B_ = A * (1 - 1/INVF); E2 = 1 - (B_/A)**2
 LAT0, LON0, K0, FE, FN = math.radians(38.0), math.radians(127.0028902777778), 1.0, 200000.0, 500000.0
 TOWGS = (-115.80, 474.99, 674.11, 1.16, -2.31, -1.63, 6.43)
 
-def mlen(phi, a=A, e2=E2):
+def mlen(phi, a=None, e2=None):
+    a = A if a is None else a; e2 = E2 if e2 is None else e2
     e4, e6 = e2*e2, e2**3
     return a*((1-e2/4-3*e4/64-5*e6/256)*phi - (3*e2/8+3*e4/32+45*e6/1024)*math.sin(2*phi)
               + (15*e4/256+45*e6/1024)*math.sin(4*phi) - (35*e6/3072)*math.sin(6*phi))
