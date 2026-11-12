@@ -1,5 +1,6 @@
 """서울 도시계획사업(서울플랜+) SHP(EPSG:5174)에서 당사 사업장 경계를 골라 WGS84 좌표로 바꿉니다.
-사용법: python3 shp_to_areas.py <shp 파일> <dbf 파일> <구역번호(행번호)…>
+사용법: python3 shp_to_areas.py [--5186] <shp 파일> <dbf 파일> <구역번호(행번호)…>
+  --5186: 국토부 연속주제 정비구역(LSMD_CONT_UD602) 등 EPSG:5186 자료
 외부 라이브러리 없이 동작합니다."""
 import math, struct, sys, json
 
@@ -69,8 +70,13 @@ def ecef2geo(X, Y, Z, a, e2):
     return lat, lon
 
 WA, WE2 = 6378137.0, 0.00669437999014
+CRS = '5174'
+def use_5186():  # 국토부·브이월드 SHP (GRS80 중부원점, FN 600000) — WGS84와 사실상 같은 기준
+    global A, E2, LON0, FN, CRS
+    A, E2, LON0, FN, CRS = 6378137.0, 0.00669438002290, math.radians(127.0), 600000.0, '5186'
 def to_wgs(x, y):
     lat, lon = tm_inverse(x, y)
+    if CRS == '5186': return round(math.degrees(lat), 6), round(math.degrees(lon), 6)
     X, Y, Z = geo2ecef(lat, lon, A, E2)
     tx, ty, tz, rx, ry, rz, s = TOWGS
     rx, ry, rz = (math.radians(v/3600) for v in (rx, ry, rz)); m = 1 + s*1e-6
@@ -90,7 +96,9 @@ def simplify(pts, tol=1.0):  # Douglas-Peucker (미터 단위, 원 좌표계)
     return rec(0, len(pts)-1)
 
 if __name__ == '__main__':
-    shp, dbf, *ids = sys.argv[1:]
+    args = sys.argv[1:]
+    if args[0] == '--5186': use_5186(); args = args[1:]
+    shp, dbf, *ids = args
     recs, shapes = read_dbf(dbf), read_shp(shp)
     out = {}
     for i in map(int, ids):
@@ -98,5 +106,5 @@ if __name__ == '__main__':
         ring = rings[0][:-1] if rings[0][0] == rings[0][-1] else rings[0]
         far = max(range(len(ring)), key=lambda k: (ring[k][0]-ring[0][0])**2 + (ring[k][1]-ring[0][1])**2)
         ring = simplify(ring[:far+1], 0.8)[:-1] + simplify(ring[far:] + [ring[0]], 0.8)[:-1]
-        out[i] = {'name': recs[i]['DGM_NM'], 'ar': float(recs[i]['DGM_AR'] or 0), 'parts': len(rings), 'path': [list(to_wgs(x, y)) for x, y in ring]}
+        out[i] = {'name': (recs[i].get('DGM_NM') or recs[i].get('ALIAS') or recs[i].get('REMARK') or '').strip('\x00 '), 'ar': float(recs[i].get('DGM_AR') or 0), 'parts': len(rings), 'path': [list(to_wgs(x, y)) for x, y in ring]}
     print(json.dumps(out, ensure_ascii=False))
