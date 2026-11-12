@@ -108,7 +108,7 @@ const S = {
   sites: [], meta: null, map: null, sel: null, sheetTab: 'info', sort: 'dist',
   siteMarks: {}, layer: [], circle: null, me: null, meMark: null, fix: false,
   near: {}, ch: {}, an: null, // an: 현재 사업장 분석 결과
-  saved: LS.get('saved', []), sitePos: LS.get('sitePos', {}), siteFilter: '전체', calFilter: '전체'
+  saved: LS.get('saved', []), sitePos: LS.get('sitePos', {}), siteArea: LS.get('siteArea', {}), areaOv: {}, draw: null, cadastral: false, siteFilter: '전체', calFilter: '전체'
 };
 const sitePoint = (s) => S.sitePos[s.id] ? { lat: S.sitePos[s.id][0], lng: S.sitePos[s.id][1] } : { lat: s.lat, lng: s.lng };
 
@@ -126,9 +126,10 @@ async function init() {
   $('#mapMsg').remove();
   S.map = new kakao.maps.Map($('#map'), { center: new kakao.maps.LatLng(36.6, 127.8), level: 12 });
   S.map.addControl(new kakao.maps.ZoomControl(), kakao.maps.ControlPosition.RIGHT);
-  kakao.maps.event.addListener(S.map, 'click', (e) => { if (S.fix) moveSite(e.latLng); });
+  kakao.maps.event.addListener(S.map, 'click', (e) => { if (S.draw) addVertex(e.latLng); else if (S.fix) moveSite(e.latLng); });
   kakao.maps.event.addListener(S.map, 'zoom_changed', () => drawLayer());
   drawSites();
+  drawAreas();
   refineSites();
   const id = decodeURIComponent((location.hash.match(/site=([^&]+)/) || [])[1] || '');
   if (id && S.sites.find((s) => s.id === id)) selectSite(id); else fitAll();
@@ -143,6 +144,8 @@ function bindUI() {
   $('#btnAll').addEventListener('click', () => { closeSite(); fitAll(); });
   $('#btnSet').addEventListener('click', openSettings);
   $('#btnMe').addEventListener('click', locateMe);
+  $('#btnCad').addEventListener('click', () => setCadastral(!S.cadastral));
+  $('#drawBar').addEventListener('click', (e) => { const b = e.target.closest('[data-d]'); if (b) drawAct(b.dataset.d); });
   $('#fixDone').addEventListener('click', () => endFix());
   $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
   // 시트 끌어 올리기/내리기 (휴대폰)
@@ -232,7 +235,7 @@ async function selectSite(id) {
   const p = sitePoint(s);
   S.map.setLevel(levelFor(settings.radius));
   S.map.setCenter(new kakao.maps.LatLng(p.lat - latShift(settings.radius), p.lng));
-  drawCircle();
+  drawCircle(); if (S.map) drawAreas();
   S.an = { site: s, status: '주변 자료 찾는 중…', prog: 0, cx: null, ch: null, addr: '' };
   renderSheet(); setSheet('show');
   Kakao.address(p).then((a) => { if (S.an && S.an.site === s) { S.an.addr = a; if (S.sheetTab === 'info') renderSheetBody(); } });
@@ -419,9 +422,11 @@ function infoHTML(s, an) {
       <dt>시공사</dt><dd>${esc(s.builder)}</dd>
       <dt>진행 단계</dt><dd>${esc(s.stage)}</dd>
       <dt>당사 역할</dt><dd>${esc(s.role || '-')}</dd>
+      <dt>구역 면적</dt><dd>${areaOf(s) ? fmtArea(areaOf(s)) + (S.siteArea[s.id] ? ' <span class="meta">(이 기기에서 그림)</span>' : '') : '<span class="meta">경계 미입력 · ✏️ 구역 그리기로 입력</span>'}</dd>
     </dl>
     <div class="btns">
       <button class="btn" data-act="fix">📌 위치 맞추기</button>
+      <button class="btn" data-act="draw">✏️ 구역 ${areaPath(s) ? '다시 ' : ''}그리기</button>
     </div>
     <div class="note">기준: 사업장 정보 2026.10 · 지도 위 위치는 대략적인 위치예요${S.sitePos[s.id] ? ' (이 기기에서 옮긴 위치 사용 중)' : ''}. 시세는 국토교통부 실거래가(전용면적 기준 평당가, 최근 12개월 거래 가중평균)입니다.</div>`;
 }
@@ -523,6 +528,7 @@ function bindBody() {
     const c = t.closest('[data-chr]'); if (c) { settings.chRadius = +c.dataset.chr; LS.set('settings', settings); renderSheet(); drawLayer(); return; }
     const so = t.closest('[data-sort]'); if (so) { S.sort = so.dataset.sort; renderSheetBody(); return; }
     if (t.closest('[data-act="fix"]')) return startFix();
+    if (t.closest('[data-act="draw"]')) return startDraw();
     const it = t.closest('.item'); if (it) {
       const open = !it.classList.contains('open');
       $$('.item.open', body).forEach((x) => x.classList.remove('open'));
@@ -657,6 +663,79 @@ function endFix() {
     $('#resetPos').onclick = () => { delete S.sitePos[s.id]; LS.set('sitePos', S.sitePos); placeSite(s); closeModal(); selectSite(s.id); };
   }
   selectSite(s.id);
+}
+
+// ---------- 구역 경계 ----------
+const areaPath = (s) => S.siteArea[s.id] || s.area || null; // [[위도, 경도], ...]
+function polyArea(path) { // ㎡ (지구 곡률 무시한 평면 근사 — 구역 크기에선 오차 미미)
+  if (!path || path.length < 3) return 0;
+  const r = Math.PI / 180, lat0 = path[0][0] * r, R = 6371000;
+  const xy = path.map(([la, lo]) => [lo * r * R * Math.cos(lat0), la * r * R]);
+  let a = 0; for (let i = 0; i < xy.length; i++) { const [x1, y1] = xy[i], [x2, y2] = xy[(i + 1) % xy.length]; a += x1 * y2 - x2 * y1; }
+  return Math.abs(a) / 2;
+}
+const areaOf = (s) => polyArea(areaPath(s));
+const fmtArea = (m2) => `${fmtN(m2)}㎡ (${fmtN(m2 / 3.3058)}평)`;
+function drawAreas() {
+  Object.values(S.areaOv).forEach((o) => o.setMap(null)); S.areaOv = {};
+  for (const s of S.sites) {
+    const path = areaPath(s); if (!path || path.length < 3) continue;
+    const c = getComputedStyle(document.documentElement).getPropertyValue(/소규모|가로|모아/.test(s.type) ? '--t-small' : /재건축/.test(s.type) ? '--t-recon' : '--t-redev').trim() || '#1d5fd1';
+    const sel = S.sel && S.sel.id === s.id;
+    const pg = new kakao.maps.Polygon({ path: path.map(([a, b]) => new kakao.maps.LatLng(a, b)), strokeWeight: sel ? 3 : 2, strokeColor: c, strokeOpacity: .95, strokeStyle: 'solid', fillColor: c, fillOpacity: sel ? .22 : .12, zIndex: 2 });
+    pg.setMap(S.map);
+    kakao.maps.event.addListener(pg, 'click', () => { if (!S.draw && !S.fix) selectSite(s.id); });
+    S.areaOv[s.id] = pg;
+  }
+}
+function setCadastral(on) {
+  S.cadastral = on; if (!S.map) return;
+  if (on) S.map.addOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT); else S.map.removeOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT);
+  $('#btnCad').classList.toggle('on', on);
+  toast(on ? '지적편집도를 켰어요 (필지 경계 표시)' : '지적편집도를 껐어요');
+}
+function startDraw() {
+  if (!S.sel) return;
+  S.draw = { path: [], line: null, poly: null, dots: [] };
+  if (S.areaOv[S.sel.id]) S.areaOv[S.sel.id].setMap(null);
+  if (S.circle) S.circle.setMap(null);
+  clearLayer(); setSheet('hide'); $('#drawBar').classList.add('on');
+  if (!S.cadastral) setCadastral(true);
+  const p = sitePoint(S.sel); S.map.setLevel(3); S.map.setCenter(new kakao.maps.LatLng(p.lat, p.lng));
+  updateDrawBar();
+}
+function addVertex(ll) { S.draw.path.push([+ll.getLat().toFixed(6), +ll.getLng().toFixed(6)]); renderDraft(); }
+function renderDraft() {
+  const d = S.draw; [d.line, d.poly, ...d.dots].forEach((o) => o && o.setMap(null)); d.dots = [];
+  const lls = d.path.map(([a, b]) => new kakao.maps.LatLng(a, b));
+  if (lls.length >= 3) { d.poly = new kakao.maps.Polygon({ path: lls, strokeWeight: 3, strokeColor: '#e8590c', strokeOpacity: 1, fillColor: '#e8590c', fillOpacity: .15, zIndex: 8 }); d.poly.setMap(S.map); d.line = null; }
+  else if (lls.length === 2) { d.line = new kakao.maps.Polyline({ path: lls, strokeWeight: 3, strokeColor: '#e8590c', zIndex: 8 }); d.line.setMap(S.map); d.poly = null; }
+  lls.forEach((ll, i) => { const el = document.createElement('div'); el.style.cssText = `width:${i ? 10 : 14}px;height:${i ? 10 : 14}px;border-radius:50%;background:#fff;border:3px solid #e8590c;box-sizing:border-box`; const o = new kakao.maps.CustomOverlay({ position: ll, content: el, zIndex: 9 }); o.setMap(S.map); d.dots.push(o); });
+  updateDrawBar();
+}
+function updateDrawBar() {
+  const n = S.draw.path.length;
+  $('#drawInfo').textContent = n < 3 ? `경계를 따라 지도를 눌러 꼭짓점을 찍으세요 (${n}개)` : `꼭짓점 ${n}개 · ${fmtArea(polyArea(S.draw.path))}`;
+}
+function drawAct(a) {
+  const d = S.draw; if (!d) return;
+  if (a === 'undo') { d.path.pop(); renderDraft(); return; }
+  if (a === 'clear') { d.path = []; renderDraft(); return; }
+  if (a === 'cad') { setCadastral(!S.cadastral); return; }
+  const s = S.sel;
+  [d.line, d.poly, ...d.dots].forEach((o) => o && o.setMap(null));
+  S.draw = null; $('#drawBar').classList.remove('on');
+  if (a === 'done' && d.path.length >= 3) {
+    S.siteArea[s.id] = d.path; LS.set('siteArea', S.siteArea);
+    const txt = `"area": ${JSON.stringify(d.path)}`;
+    navigator.clipboard?.writeText(txt).catch(() => {});
+    openModal(`<h3>✏️ ${esc(s.name)} 구역을 저장했어요</h3>
+      <p class="meta" style="line-height:1.6">면적 <b>${fmtArea(polyArea(d.path))}</b> · 꼭짓점 ${d.path.length}개<br>이 기기에서는 바로 보여요. 모두에게 보이게 하려면 아래 값(클립보드에 복사됨)을 Claude에게 붙여 넣어 주세요.</p>
+      <textarea class="input num" readonly rows="4" onclick="this.select()" style="font-size:11px">${esc(txt)}</textarea>
+      <div class="btns" style="margin-top:14px">${s.area ? '' : ''}<button class="btn" id="delArea">이 기기 구역 지우기</button><button class="btn p" onclick="closeModal()">확인</button></div>`);
+    $('#delArea').onclick = () => { delete S.siteArea[s.id]; LS.set('siteArea', S.siteArea); closeModal(); drawAreas(); selectSite(s.id); };
+  } else if (a === 'done') toast('꼭짓점을 3개 이상 찍어 주세요');
+  drawAreas(); selectSite(s.id);
 }
 
 // ---------- 내 위치 ----------
