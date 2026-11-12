@@ -50,9 +50,6 @@ async function getJSON(url) { const r = await fetch(url, { cache: 'no-cache' });
 
 // ---------- 링크 ----------
 const Links = {
-  route: (n, p) => `https://map.kakao.com/link/to/${encodeURIComponent(n)},${p.lat},${p.lng}`,
-  map: (n, p) => `https://map.kakao.com/link/map/${encodeURIComponent(n)},${p.lat},${p.lng}`,
-  road: (p) => `https://map.kakao.com/link/roadview/${p.lat},${p.lng}`,
   naverLand: (q) => `https://m.land.naver.com/search/result/${encodeURIComponent(q)}`,
 };
 
@@ -140,7 +137,7 @@ async function init() {
 
 function bindUI() {
   $('#tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) showView(b.dataset.v); });
-  $('#stabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; S.sheetTab = b.dataset.t; renderSheetBody(); setSheet('open'); });
+  $('#stabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; S.sheetTab = b.dataset.t; $$('#stabs button').forEach((x) => x.classList.toggle('on', x === b)); renderSheetBody(); setSheet('open'); });
   $('#handle').addEventListener('click', () => setSheet($('#sheet').classList.contains('open') ? 'show' : 'open'));
   $('#shHead').addEventListener('click', (e) => { if (e.target.closest('.x')) return closeSite(); if (!$('#sheet').classList.contains('open')) setSheet('open'); });
   $('#btnAll').addEventListener('click', () => { closeSite(); fitAll(); });
@@ -414,7 +411,6 @@ function renderSheetBody() {
 }
 
 function infoHTML(s, an) {
-  const p = sitePoint(s);
   return `
     <dl class="dl">
       <dt>사업유형</dt><dd>${esc(s.type)}</dd>
@@ -425,9 +421,6 @@ function infoHTML(s, an) {
       <dt>당사 역할</dt><dd>${esc(s.role || '-')}</dd>
     </dl>
     <div class="btns">
-      <a class="btn k" href="${Links.route(s.name, p)}" target="_blank" rel="noopener">🚗 길찾기</a>
-      <a class="btn" href="${Links.map(s.name, p)}" target="_blank" rel="noopener">🗺️ 카카오맵</a>
-      <a class="btn" href="${Links.road(p)}" target="_blank" rel="noopener">👀 로드뷰</a>
       <button class="btn" data-act="fix">📌 위치 맞추기</button>
     </div>
     <div class="note">기준: 사업장 정보 2026.10 · 지도 위 위치는 대략적인 위치예요${S.sitePos[s.id] ? ' (이 기기에서 옮긴 위치 사용 중)' : ''}. 시세는 국토교통부 실거래가(전용면적 기준 평당가, 최근 12개월 거래 가중평균)입니다.</div>`;
@@ -461,7 +454,6 @@ function priceHTML() {
   return head + list.map((r) => {
     const id = cxId(r), cls = ageCls(r.by);
     const deals = (r.deals || []).map((d) => `<tr><td>${d[0].slice(2, 4)}.${d[0].slice(4, 6)}.${d[0].slice(6, 8)}</td><td>전용 ${d[1]}㎡</td><td>${d[2] ?? '-'}층</td><td>${fmtEok(d[3])}</td></tr>`).join('');
-    const p = { lat: r.lat, lng: r.lng };
     return `<div class="item" data-cx="${esc(id)}">
       <div class="row">
         <div class="grow"><div class="nm">${esc(r.apt)}</div>
@@ -473,8 +465,6 @@ function priceHTML() {
         ${spark(r.q)}
         ${deals ? `<table class="deals num">${deals}</table>` : '<div class="meta" style="margin:6px 0 10px">개별 거래 내역은 지역 상위 단지만 보관돼요. 12개월 대표 거래가 ' + fmtEok(r.amt12) + '</div>'}
         <div class="btns">
-          <a class="btn k sm" href="${Links.route(r.apt, p)}" target="_blank" rel="noopener">길찾기</a>
-          <a class="btn sm" href="${Links.map(r.apt, p)}" target="_blank" rel="noopener">카카오맵</a>
           <a class="btn sm" href="${Links.naverLand(r.n + ' ' + r.apt)}" target="_blank" rel="noopener">네이버부동산</a>
           <button class="star ${isSaved('cx', id) ? 'on' : ''}" data-save="cx" data-id="${esc(id)}" title="저장">★</button>
         </div>
@@ -490,7 +480,6 @@ function chCard(it, withDist = true) {
   let sg = 0, sgs = 0; for (const t of ty) if (t[1] && t[2]) { sg += t[3] || 1; sgs += (t[2] / (t[1] / 3.3058)) * (t[3] || 1); }
   const comp = it.comp && it.comp.avg1 != null ? `1순위 평균 ${it.comp.avg1}:1` : it.rcept >= TODAY ? '접수 전' : it.comp ? '경쟁률 집계 중' : '';
   const st = it.rcept > TODAY ? ['접수 예정', 'var(--ch)'] : it.winner >= TODAY ? ['진행 중', 'var(--warn)'] : ['분양 완료', 'var(--old)'];
-  const p = { lat: it.lat, lng: it.lng };
   return `<div class="item" data-ch="${esc(it.id)}">
     <div class="row"><div class="grow">
       <div class="nm">${esc(it.name)}</div>
@@ -502,7 +491,6 @@ function chCard(it, withDist = true) {
       <div class="meta" style="margin:4px 0 10px">분양가 ${prices.length ? fmtEok(Math.min(...prices)) + ' ~ ' + fmtEok(Math.max(...prices)) : '–'}${sg ? ` · 공급면적 평당 ${fmtN(sgs / sg)}만` : ''}</div>
       <div class="btns">
         <a class="btn p sm" href="${esc(it.url)}" target="_blank" rel="noopener">입주자모집공고</a>
-        ${it.lat ? `<a class="btn k sm" href="${Links.route(it.name, p)}" target="_blank" rel="noopener">길찾기</a>` : ''}
         <button class="star ${isSaved('ch', it.id) ? 'on' : ''}" data-save="ch" data-id="${esc(it.id)}" title="저장">★</button>
       </div>
     </div>
@@ -600,7 +588,6 @@ function renderSaved() {
       <div class="meta">${esc(x.sub)}${x.val ? ` · 평당 ${fmtN(x.val)}만` : ''}${x.rcept ? ` · 접수 ${fmtDate(x.rcept)}` : ''}</div>
     </div><button class="star on" data-del="${esc(x.kind + '|' + x.id)}" title="저장 해제">★</button></div>
     <div class="btns" style="margin-top:10px">
-      ${x.lat ? `<a class="btn k sm" href="${Links.route(x.name, x)}" target="_blank" rel="noopener">길찾기</a><a class="btn sm" href="${Links.map(x.name, x)}" target="_blank" rel="noopener">카카오맵</a>` : ''}
       ${x.url ? `<a class="btn p sm" href="${esc(x.url)}" target="_blank" rel="noopener">모집공고</a>` : ''}
     </div></div>`).join('');
   el.onclick = (e) => {

@@ -1,7 +1,7 @@
 # 정비맵 (가칭)
 
 당사 정비사업장을 지도에서 고르면 **사업장 기본정보 · 반경 안 아파트 실거래 시세·평당가 · 인근 청약 일정 · 입주(공급) 예정 단지**를 한 번에 보는 앱입니다.
-[분양시장 레이더](https://younguk06-sonny.github.io/New-Build_Rader/)의 자료와 [자두](https://younguk06-sonny.github.io/myeongso/)의 지도·저장·길찾기 틀을 합쳤습니다.
+[분양시장 레이더](https://younguk06-sonny.github.io/New-Build_Rader/)의 자료와 [자두](https://younguk06-sonny.github.io/myeongso/)의 지도·저장 틀을 합쳤습니다.
 
 주소: `https://younguk06-sonny.github.io/jeongbi-map/`
 
