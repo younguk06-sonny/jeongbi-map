@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2f74e8"/><stop offset="1" stop-color="#0b3d91"/></linearGradient></defs>
+  <rect width="512" height="512" rx="112" fill="url(#g)"/>
+  <g fill="#ffffff" opacity=".22"><rect x="70" y="300" width="70" height="140" rx="8"/><rect x="372" y="270" width="70" height="170" rx="8"/></g>
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#ffffff" stroke-opacity=".35" stroke-width="10" stroke-dasharray="26 18"/>
+  <path d="M256 92c-62 0-112 50-112 112 0 84 112 196 112 196s112-112 112-196c0-62-50-112-112-112z" fill="#ffffff"/>
+  <g fill="#1d5fd1">
+    <rect x="206" y="160" width="40" height="96" rx="5"/><rect x="254" y="134" width="52" height="122" rx="5"/>
+  </g>
+  <g fill="#ffffff"><rect x="216" y="174" width="8" height="10"/><rect x="230" y="174" width="8" height="10"/><rect x="216" y="196" width="8" height="10"/><rect x="230" y="196" width="8" height="10"/><rect x="216" y="218" width="8" height="10"/><rect x="230" y="218" width="8" height="10"/>
+  <rect x="266" y="150" width="9" height="11"/><rect x="285" y="150" width="9" height="11"/><rect x="266" y="174" width="9" height="11"/><rect x="285" y="174" width="9" height="11"/><rect x="266" y="198" width="9" height="11"/><rect x="285" y="198" width="9" height="11"/><rect x="266" y="222" width="9" height="11"/><rect x="285" y="222" width="9" height="11"/></g>
+</svg>

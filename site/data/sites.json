@@ -1,0 +1,19 @@
+{
+  "asOf": "2026-10",
+  "note": "공개 사이트라 공개된 수준의 정보(위치·유형·세대수·시공사·진행단계)만 넣습니다. lat/lng는 대략 위치이며, 앱에서 '위치 맞추기'로 옮긴 뒤 표시되는 값을 여기에 붙여 넣으면 모두에게 반영됩니다. q가 있으면 카카오 장소 검색으로 위치를 다시 잡습니다(주소에 dong이 들어간 결과만 사용).",
+  "sites": [
+    { "id": "haeundae-ijin", "name": "해운대 이진캐스빌", "type": "소규모재건축", "role": "사업시행자", "sido": "부산", "sgg": "해운대구", "dong": "우동", "lat": 35.1650, "lng": 129.1585, "q": "이진캐스빌 해운대", "households": 125, "builder": "대상건설", "stage": "사업시행·관리처분계획 수립" },
+    { "id": "toegyewon4", "name": "퇴계원4구역", "type": "재개발", "role": "사업시행자", "sido": "경기", "sgg": "남양주시", "dong": "퇴계원읍", "lat": 37.6470, "lng": 127.1420, "households": 557, "builder": "동부건설", "stage": "사업시행계획인가 신청(재접수)" },
+    { "id": "sinimun", "name": "신이문역세권", "type": "재개발", "role": "사업시행자", "sido": "서울", "sgg": "동대문구", "dong": "이문동", "lat": 37.6010, "lng": 127.0665, "households": 1201, "builder": "대우건설", "stage": "통합심의 진행" },
+    { "id": "gimhae-sambang", "name": "김해 삼방 동성", "type": "재건축", "role": "사업시행자", "sido": "경남", "sgg": "김해시", "dong": "삼방동", "lat": 35.2475, "lng": 128.9075, "q": "삼방동 동성아파트", "households": 825, "builder": "선정 중", "stage": "사업시행계획인가 신청" },
+    { "id": "gunja9", "name": "안산 군자주공9단지", "type": "재건축", "role": "사업시행자", "sido": "경기", "sgg": "안산시 단원구", "dong": "선부동", "lat": 37.3384, "lng": 126.8070, "q": "군자주공9단지", "households": 742, "builder": "선정 중", "stage": "사업시행계획인가 완료(2026.09)" },
+    { "id": "sangdo15", "name": "상도15구역", "type": "재개발", "role": "사업시행자", "sido": "서울", "sgg": "동작구", "dong": "상도동", "lat": 37.4985, "lng": 126.9440, "households": 3187, "builder": "대우건설", "stage": "사업시행계획인가 신청 준비" },
+    { "id": "mokdong13", "name": "목동13단지", "type": "재건축", "role": "사업시행자", "sido": "서울", "sgg": "양천구", "dong": "신정동", "lat": 37.5227, "lng": 126.8613, "q": "목동신시가지13단지", "households": 3852, "builder": "삼성물산(우선협상)", "stage": "통합심의 조건부 통과" },
+    { "id": "sookdae", "name": "숙대입구역세권", "type": "재개발(역세권 장기전세)", "role": "사업시행자", "sido": "서울", "sgg": "용산구", "dong": "갈월동", "lat": 37.5440, "lng": 126.9715, "households": 900, "builder": "선정 중", "stage": "통합심의 조건부 통과" },
+    { "id": "gunja10", "name": "안산 군자주공10단지", "type": "재건축", "role": "사업시행자", "sido": "경기", "sgg": "안산시 단원구", "dong": "선부동", "lat": 37.3407, "lng": 126.8028, "q": "군자주공10단지", "households": 975, "builder": "선정 중", "stage": "통합심의 준비" },
+    { "id": "sanbon1-3", "name": "산본1동3구역", "type": "재개발", "role": "사업시행자", "sido": "경기", "sgg": "군포시", "dong": "산본동", "lat": 37.3690, "lng": 126.9365, "households": 615, "builder": "-", "stage": "통합심의 접수 준비" },
+    { "id": "sillim5", "name": "신림5구역", "type": "재개발", "role": "사업시행자", "sido": "서울", "sgg": "관악구", "dong": "신림동", "lat": 37.4785, "lng": 126.9265, "households": 3800, "builder": "-", "stage": "통합심의 진행" },
+    { "id": "yangji", "name": "분당 양지마을", "type": "재건축(노후계획도시)", "role": "사업시행자", "sido": "경기", "sgg": "성남시 분당구", "dong": "수내동", "lat": 37.3787, "lng": 127.1203, "households": 6839, "builder": "-", "stage": "1차 전체회의 완료" },
+    { "id": "seonghyeon-moa", "name": "성현동 모아타운", "type": "가로주택(모아타운)", "role": "사업시행자", "sido": "서울", "sgg": "관악구", "dong": "봉천동", "lat": 37.4895, "lng": 126.9440, "households": 2009, "builder": "-", "stage": "통합심의 준비" }
+  ]
+}
