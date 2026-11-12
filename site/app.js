@@ -422,7 +422,7 @@ function infoHTML(s, an) {
       <dt>시공사</dt><dd>${esc(s.builder)}</dd>
       <dt>진행 단계</dt><dd>${esc(s.stage)}</dd>
       <dt>당사 역할</dt><dd>${esc(s.role || '-')}</dd>
-      <dt>구역 면적</dt><dd>${areaOf(s) ? fmtArea(areaOf(s)) + (S.siteArea[s.id] ? ' <span class="meta">(이 기기에서 그림)</span>' : '') : '<span class="meta">경계 미입력 · ✏️ 구역 그리기로 입력</span>'}</dd>
+      <dt>구역 면적</dt><dd>${areaOf(s) ? fmtArea(areaOf(s)) + (S.siteArea[s.id] ? ' <span class="meta">(이 기기에서 그림)</span>' : s.areaSrc ? `<div class="meta" style="font-weight:500">${esc(s.areaSrc)}</div>` : '') : '<span class="meta">경계 미입력 · ✏️ 구역 그리기로 입력</span>'}</dd>
     </dl>
     <div class="btns">
       <button class="btn" data-act="fix">📌 위치 맞추기</button>
