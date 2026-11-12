@@ -204,12 +204,13 @@ function placeSite(s) { const m = S.siteMarks[s.id]; if (m) { const p = sitePoin
 // 이름이 분명한 단지(q)는 카카오 장소 검색으로 위치를 다시 잡음 (주소에 동 이름이 들어간 결과만)
 async function refineSites() {
   for (const s of S.sites) {
-    if (!s.q || S.sitePos[s.id]) continue;
-    const k = 'site|' + s.id + '|' + s.q;
+    if ((!s.q && !s.addr) || s.area || S.sitePos[s.id]) continue;
+    const k = 'site|' + s.id + '|' + (s.addr || s.q);
     let v = Geo.get(k);
     if (v === undefined) {
-      const r = await Kakao.keyword(s.q, { location: new kakao.maps.LatLng(s.lat, s.lng), radius: 5000 });
-      const hit = r.find((x) => (x.address_name || '').includes(s.dong));
+      let hit = null;
+      if (s.addr) { const r = await Kakao.addressSearch(s.addr); if (r.length) hit = r[0]; }
+      if (!hit && s.q) { const r = await Kakao.keyword(s.q, { location: new kakao.maps.LatLng(s.lat, s.lng), radius: 5000 }); hit = r.find((x) => (x.address_name || '').includes(s.dong)); }
       v = hit ? [+hit.y, +hit.x] : 0; Geo.put(k, v);
     }
     if (v) { s.lat = v[0]; s.lng = v[1]; placeSite(s); }
