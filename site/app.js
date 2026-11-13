@@ -142,12 +142,10 @@ async function init() {
 }
 
 function bindUI() {
-  $('#tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) showView(b.dataset.v); });
   $('#stabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; S.sheetTab = b.dataset.t; $$('#stabs button').forEach((x) => x.classList.toggle('on', x === b)); renderSheetBody(); setSheet('open'); });
   $('#handle').addEventListener('click', () => setSheet($('#sheet').classList.contains('open') ? 'show' : 'open'));
   $('#shHead').addEventListener('click', (e) => { if (e.target.closest('.x')) return closeSite(); if (!$('#sheet').classList.contains('open')) setSheet('open'); });
   $('#btnSet').addEventListener('click', openSettings);
-  $('#btnStudy').addEventListener('click', () => { openDrawer(true); setTimeout(() => $('#drStudy').scrollIntoView({ block: 'end' }), 280); });
   $('#ftabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; if (PRICE_MODES[b.dataset.p]) priceTab(b.dataset.p); else openTab(b.dataset.p); });
   regionBind();
   $('#btnMe').addEventListener('click', locateMe);
@@ -303,7 +301,6 @@ function setSheet(st) {
   const h = st === 'hide' || desk ? 0 : st === 'show' ? peek : sh.offsetHeight;
   $('#fabs').style.bottom = (h + 14) + 'px';
   $('#legend').style.bottom = (h + 14) + 'px';
-  $('#btnStudy').style.bottom = (h + 14) + 'px';
   $('#legend').classList.toggle('on', st !== 'hide' && (desk || st === 'show'));
 }
 
