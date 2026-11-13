@@ -145,6 +145,7 @@ function bindUI() {
   $('#handle').addEventListener('click', () => setSheet($('#sheet').classList.contains('open') ? 'show' : 'open'));
   $('#shHead').addEventListener('click', (e) => { if (e.target.closest('.x')) return closeSite(); if (!$('#sheet').classList.contains('open')) setSheet('open'); });
   $('#btnSet').addEventListener('click', openSettings);
+  $('#btnStudy').addEventListener('click', () => { openDrawer(true); setTimeout(() => $('#drStudy').scrollIntoView({ block: 'end' }), 280); });
   $('#ftabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) openTab(b.dataset.p); });
   regionBind();
   $('#btnMe').addEventListener('click', locateMe);
@@ -294,6 +295,7 @@ function setSheet(st) {
   const h = st === 'hide' || desk ? 0 : st === 'show' ? peek : sh.offsetHeight;
   $('#fabs').style.bottom = (h + 14) + 'px';
   $('#legend').style.bottom = (h + 14) + 'px';
+  $('#btnStudy').style.bottom = (h + 14) + 'px';
   $('#legend').classList.toggle('on', st !== 'hide' && (desk || st === 'show'));
 }
 
@@ -496,6 +498,7 @@ function priceHTML() {
         ${deals ? `<table class="deals num">${deals}</table>` : '<div class="meta" style="margin:6px 0 10px">개별 거래 내역은 지역 상위 단지만 보관돼요. 12개월 대표 거래가 ' + fmtEok(r.amt12) + '</div>'}
         <div class="btns">
           <a class="btn sm" href="${Links.naverLand(r.n + ' ' + r.apt)}" target="_blank" rel="noopener">네이버부동산</a>
+          <button class="btn sm cmpadd ${ST.cmp.some((x) => cmpKey(x) === id) ? 'on' : ''}" data-cmpadd='${esc(JSON.stringify({ code: r.code, dong: r.dong, apt: r.apt }))}'>${ST.cmp.some((x) => cmpKey(x) === id) ? '✓ 비교 담김' : '＋ 비교 담기'}</button>
           <button class="star ${isSaved('cx', id) ? 'on' : ''}" data-save="cx" data-id="${esc(id)}" title="저장">★</button>
         </div>
       </div>
@@ -548,6 +551,7 @@ function bindBody() {
   body.onclick = (e) => {
     const t = e.target;
     if (t.closest('a')) return;
+    const ca = t.closest('[data-cmpadd]'); if (ca) { const c = JSON.parse(ca.dataset.cmpadd); cmpToggle(c); const on = ST.cmp.some((x) => cmpKey(x) === cmpKey(c)); ca.classList.toggle('on', on); ca.textContent = on ? '✓ 비교 담김' : '＋ 비교 담기'; return; }
     const star = t.closest('[data-save]'); if (star) { toggleSave(star.dataset.save, star.dataset.id); star.classList.toggle('on', isSaved(star.dataset.save, star.dataset.id)); return; }
     const r = t.closest('[data-r]'); if (r) { settings.radius = +r.dataset.r; LS.set('settings', settings); drawCircle(); const p = sitePoint(S.sel); S.map.setLevel(levelFor(settings.radius)); S.map.setCenter(new kakao.maps.LatLng(p.lat - latShift(settings.radius), p.lng)); renderSheet(); drawLayer(); return; }
     const c = t.closest('[data-chr]'); if (c) { settings.chRadius = +c.dataset.chr; LS.set('settings', settings); renderSheet(); drawLayer(); return; }

@@ -43,6 +43,7 @@ function openDrawer(on) {
   if (on) {
     openTab(null);
     renderDrawer();
+    renderStudyGrid();
     if (innerWidth >= 900) setTimeout(() => $('#q').focus(), 50);
   }
 }
@@ -143,6 +144,7 @@ async function onDrawerClick(e) {
     closeSite(); closeOnMobile();
     const zb = Z.meta?.sgg[b.dataset.code]?.bb;
     const p = await geocodeOnce(b.dataset.code, `${SIDO_FULL[v.sd] || v.sd} ${v.n}`);
+    S.where = { sd: v.sd, sgg: v.n, code: b.dataset.code }; ST.level = null;
     if (p) moveTo(p, 7); else if (zb) moveTo({ lat: (zb[0] + zb[2]) / 2, lng: (zb[1] + zb[3]) / 2 }, 7);
     $$('#drBody .rg-cell.on').forEach((x) => x.classList.remove('on')); b.classList.add('on');
     return;
@@ -159,6 +161,7 @@ async function onDrawerClick(e) {
 }
 async function goSido(sd) {
   closeSite();
+  S.where = { sd }; ST.level = 'sd'; onStudyWhere();
   const p = await geocodeOnce('sd|' + sd, SIDO_FULL[sd] || sd);
   moveTo(p, SIDO_LEVEL[sd] || 11);
 }
@@ -173,6 +176,10 @@ function updateWhere() {
     const c = S.map.getCenter ? S.map.getCenter() : null; if (!c) return;
     const r = (await Kakao.regionCodes({ lat: c.getLat(), lng: c.getLng() })).find((x) => x.region_type === 'B');
     if (!r) return;
+    const code = r.code.slice(0, 5), mc = S.meta?.codes[code];
+    const prev = S.where && S.where.code;
+    if (mc) S.where = { sd: mc.sd, sgg: mc.n, code };
+    if ((S.where && S.where.code) !== prev && typeof onStudyWhere === 'function') onStudyWhere();
     const sd = r.region_1depth_name.replace(/(특별자치시|특별자치도|특별시|광역시|도)$/, '').replace(/^(충청|전라|경상)(남|북)$/, (m, a, b) => ({ 충청: '충', 전라: '전', 경상: '경' }[a] + b));
     $('#where').textContent = [sd, lvl <= 9 ? r.region_2depth_name : '', lvl <= 6 ? r.region_3depth_name : ''].filter(Boolean).join(' ');
   }, 250);
