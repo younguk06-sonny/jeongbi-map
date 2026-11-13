@@ -183,7 +183,7 @@ function saleInfoHTML(s, an) {
 function renderSalePanel() {
   const el = $('#salePanel'); if (!el) return;
   el.innerHTML = `<div class="zf-row">
-      <button class="zf-tog ${SL.visible ? 'on' : ''}" data-s="vis">분양 ${SL.visible ? '켜짐' : '꺼짐'}</button>
+      <button class="zf-sw ${SL.visible ? 'on' : ''}" data-s="vis" role="switch" aria-checked="${SL.visible}"><span>분양</span><b class="swi"><i></i><em>${SL.visible ? 'ON' : 'OFF'}</em></b></button>
       ${SALE_TYPES.map(([k, l, c]) => `<button class="chip ${SL.on[k] ? 'on' : ''}${k === 'shop' ? ' dis' : ''}" data-k="${k}" style="--c:${c}"><i></i>${l}</button>`).join('')}
     </div>
     <div class="zf-row" style="margin-top:6px"><span class="lbl">기간</span>${SALE_PERIODS.map(([k, l]) => `<button class="pchip ${SL.period === k ? 'on' : ''}" data-p="${k}">${l}</button>`).join('')}</div>
@@ -197,7 +197,7 @@ function renderSalePanel() {
     renderSalePanel(); saleTabLabel(); salesRefresh();
   };
 }
-function saleTabLabel() { $('#ftabs [data-p="sale"]')?.classList.toggle('on', SL.visible); }
+function saleTabLabel() { $('#ftabs [data-p="sale"]')?.classList.toggle('on', SL.visible); if (!SL.visible) $('#saleCnt').textContent = 'OFF'; else if ($('#saleCnt').textContent === 'OFF') $('#saleCnt').textContent = ''; }
 function salesInit() {
   kakao.maps.event.addListener(S.map, 'idle', salesRefresh);
   renderSalePanel(); saleTabLabel(); salesRefresh();

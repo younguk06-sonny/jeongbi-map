@@ -193,7 +193,7 @@ function zoneInfoHTML(s, an) {
 function renderZoneFilter() {
   const el = $('#zfilter'); if (!el || !Z.meta) return;
   el.innerHTML = `<div class="zf-row">
-      <button class="zf-tog ${Z.visible ? 'on' : ''}" data-z="vis">정비구역 ${Z.visible ? '켜짐' : '꺼짐'}</button>
+      <button class="zf-sw ${Z.visible ? 'on' : ''}" data-z="vis" role="switch" aria-checked="${Z.visible}"><span>정비구역</span><b class="swi"><i></i><em>${Z.visible ? 'ON' : 'OFF'}</em></b></button>
       ${Z.meta.cats.map(([k, l, c]) => `<button class="chip ${Z.on[k] ? 'on' : ''}" data-k="${k}" style="--c:${c}"><i></i>${l}</button>`).join('')}
       <button class="chip ${Z.showDone ? 'on' : ''}" data-z="done" style="--c:#9aa4ae"><i></i>준공 포함</button>
     </div>`;
@@ -208,6 +208,6 @@ function renderZoneFilter() {
 }
 function zoneTabLabel() {
   const n = Object.values(Z.on).filter(Boolean).length;
-  const el = $('#zoneCnt'); if (el) el.textContent = Z.visible ? `${n}/${Z.meta.cats.length}` : '끔';
+  const el = $('#zoneCnt'); if (el) el.textContent = Z.visible ? `${n}/${Z.meta.cats.length}` : 'OFF';
   $('#ftabs [data-p="zones"]')?.classList.toggle('on', Z.visible);
 }
