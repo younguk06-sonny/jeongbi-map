@@ -1,7 +1,24 @@
 /* 정비맵 — 왼쪽 지역 선택·검색 창 (아실식 시도 → 시군구 선택 + 통합 검색) */
 'use strict';
 
-const SIDO_ORDER = ['서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남광주', '경북', '경남', '제주'];
+// 권역 순서로 배치 (수도권 → 강원 → 충청 → 호남 → 영남 → 제주)
+const SIDO_ORDER = ['서울', '경기', '인천', '강원', '대전', '세종', '충북', '충남', '광주', '전북', '전남광주', '부산', '대구', '울산', '경북', '경남', '제주'];
+const GWON = [
+  ['수도권', '#2a78d6', ['서울', '경기', '인천']], ['강원', '#1baf7a', ['강원']], ['충청', '#eda100', ['대전', '세종', '충북', '충남']],
+  ['호남', '#eb6834', ['광주', '전북', '전남광주']], ['영남', '#6250d6', ['부산', '대구', '울산', '경북', '경남']], ['제주', '#e87ba4', ['제주']],
+];
+// 구가 있는 시: 실거래 자료엔 시 이름만 있어서 구 이름을 붙여 줌 (예: 고양시 → 고양시 덕양구)
+const GU_NAME = {
+  41111: '장안구', 41113: '권선구', 41115: '팔달구', 41117: '영통구', 41131: '수정구', 41133: '중원구', 41135: '분당구', 41171: '만안구', 41173: '동안구',
+  41192: '원미구', 41194: '소사구', 41196: '오정구', 41271: '상록구', 41273: '단원구', 41281: '덕양구', 41285: '일산동구', 41287: '일산서구',
+  41461: '처인구', 41463: '기흥구', 41465: '수지구', 41591: '만세구', 41593: '효행구', 41595: '병점구', 41597: '동탄구',
+  43111: '상당구', 43112: '서원구', 43113: '흥덕구', 43114: '청원구', 44131: '동남구', 44133: '서북구', 47111: '남구', 47113: '북구',
+  48121: '의창구', 48123: '성산구', 48125: '마산합포구', 48127: '마산회원구', 48129: '진해구', 52111: '완산구', 52113: '덕진구',
+};
+function fixGuNames(meta) {
+  for (const [code, v] of Object.entries(meta?.codes || {})) if (GU_NAME[code] && !v.n.includes(' ')) v.n = `${v.n} ${GU_NAME[code]}`;
+}
+const gwonOf = (sd) => GWON.find((g) => g[2].includes(sd)) || ['기타', '#868e96', []];
 const SIDO_FULL = {
   서울: '서울특별시', 경기: '경기도', 인천: '인천광역시', 부산: '부산광역시', 대구: '대구광역시', 광주: '광주광역시', 대전: '대전광역시', 울산: '울산광역시',
   세종: '세종특별자치시', 강원: '강원특별자치도', 충북: '충청북도', 충남: '충청남도', 전북: '전북특별자치도', 전남광주: '전라남도', 경북: '경상북도', 경남: '경상남도', 제주: '제주특별자치도',
@@ -55,9 +72,11 @@ function renderDrawer() {
   if (!R.sd) {
     crumb.innerHTML = '<span>시도 선택</span>';
     const sds = SIDO_ORDER.filter((sd) => list[sd]).concat(Object.keys(list).filter((sd) => !SIDO_ORDER.includes(sd)));
-    body.innerHTML = `<div class="rg-grid">${sds.map((sd) => {
+    const maxZ = Math.max(...sds.map((sd) => zc[sd] || 0), 1);
+    body.innerHTML = `<div class="gw-legend">${GWON.map(([n, c]) => `<span><i style="background:${c}"></i>${n}</span>`).join('')}</div><div class="rg-grid sido">${sds.map((sd) => {
+      const [, gc] = gwonOf(sd), z = zc[sd] || 0;
       const ours = S.sites.filter((s) => s.sido === sd).length;
-      return `<button class="rg-cell" data-sd="${esc(sd)}"><b>${esc(sd)}</b><small>${zc[sd] ? `구역 ${fmtN(zc[sd])}` : `${list[sd].length}개 시군구`}</small>${ours ? `<em>당사 ${ours}</em>` : ''}</button>`;
+      return `<button class="rg-cell sd" data-sd="${esc(sd)}" style="--g:${gc}"><b>${esc(sd === '전남광주' ? '전남·광주' : sd)}</b><small class="num">${z ? fmtN(z) : list[sd].length}<span>${z ? '구역' : '시군구'}</span></small><span class="zb"><i style="width:${z ? Math.max(6, Math.sqrt(z / maxZ) * 100) : 0}%"></i></span>${ours ? `<em title="당사 사업장 ${ours}곳">${ours}</em>` : ''}</button>`;
     }).join('')}</div>`;
     return;
   }
@@ -68,7 +87,7 @@ function renderDrawer() {
     <button class="rg-row strong" data-go="sido" data-sd="${esc(sd)}"><span class="grow">${esc(sd)} 전체 보기</span><i>›</i></button>
     ${ours.length ? `<div class="rg-sec">당사 사업장</div>${ours.map((s) => `<button class="rg-row" data-go="site" data-id="${esc(s.id)}"><i class="dot" style="background:${typeColor(s.type)}"></i><span class="grow">${esc(s.name)}<small>${esc(s.sgg)}</small></span><i>›</i></button>`).join('')}` : ''}
     <div class="rg-sec">시군구</div>
-    <div class="rg-grid sgg">${arr.map((r) => `<button class="rg-cell" data-go="sgg" data-code="${r.code}"><b>${esc(r.n)}</b>${S.sites.some((s) => s.sido === sd && r.n.includes(s.sgg.split(' ').pop())) ? '<em>당사</em>' : ''}</button>`).join('')}</div>`;
+    <div class="rg-grid sgg" style="--g:${gwonOf(sd)[1]}">${arr.map((r) => `<button class="rg-cell" data-go="sgg" data-code="${r.code}"><b>${esc(r.n)}</b>${S.sites.some((s) => s.sido === sd && r.n.includes(s.sgg.split(' ').pop())) ? '<em>당사</em>' : ''}</button>`).join('')}</div>`;
 }
 
 // ---------- 통합 검색 ----------

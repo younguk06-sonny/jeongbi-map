@@ -117,7 +117,7 @@ async function init() {
   bindUI();
   try {
     const [sites, meta] = await Promise.all([getJSON('data/sites.json'), getJSON('data/meta.json').catch(() => null)]);
-    S.sites = sites.sites; S.meta = meta;
+    S.sites = sites.sites; S.meta = meta; fixGuNames(meta);
     if (meta) $('#asOf').textContent = `실거래가 ${fmtYm(meta.tradeTo)}까지 · ${meta.builtAt.slice(5, 10).replace('-', '.')} 갱신`;
   } catch (e) { $('#mapMsg').textContent = '사업장 자료를 불러오지 못했어요. 잠시 뒤 새로고침해 주세요.'; return; }
   renderChips(); renderSites(); renderSaved();
