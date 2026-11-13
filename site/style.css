@@ -457,3 +457,6 @@ a{color:var(--accent)}
 .pr-box small{display:block;font-size:11px;color:var(--sub);font-weight:700}
 .pr-box b{display:block;font-size:18px;margin:2px 0 1px;letter-spacing:-.4px}
 .pr-box span{display:block;font-size:11px;color:var(--sub)}
+
+/* 아무것도 고르지 않았을 때 정보창이 화면 아래에 살짝 보이던 문제 */
+.sheet:not(.show){visibility:hidden;pointer-events:none;transform:translateY(calc(100% + 40px))}
