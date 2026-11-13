@@ -10,9 +10,11 @@ const PRICE_MODES = {
   mm: { name: '매매가', ico: '🏷️', c: '#0b7285', desc: '단지별 최근 12개월 평당 매매가(전용 3.3㎡ 기준, 거래 건수 가중)예요.' },
   js: { name: '전세가', ico: '🔑', c: '#2b8a3e', desc: '단지별 최근 12개월 전세 보증금(중위)과 전세가율(전세 평당 ÷ 매매 평당)이에요.' },
 };
-const PR = { mode: LS.get('priceMode', null), age: LS.get('priceAge', 'all'), marks: {}, shown: new Set(), busy: false, again: false, selKey: null };
+const PR = { mode: LS.get('priceMode', null), age: LS.get('priceAge', 'all'), amt: LS.get('priceAmt', [0, 50]), marks: {}, shown: new Set(), busy: false, again: false, selKey: null };
 const PRICE_MAX_LEVEL = 5; // 동 단위까지
-const AGES = [['all', '전체'], ['n10', '10년 이내'], ['m', '10~20년'], ['o20', '20년 초과']];
+const AGES = [['all', '전체'], ['n10', '10년 이내'], ['m', '10~20년'], ['o20', '20~30년'], ['o30', '30년 이상']];
+const AMT_MAX = 50, AMT_STEP = 0.5; // 억 단위, 50 = 상한 없음
+const AMT_BASIS = { rt: '최근 거래가', mm: '12개월 대표 거래가', js: '전세 보증금' };
 
 function cxObj(f, r) {
   return { code: f.code, sgg: f.n, sd: f.sd, apt: r[0], dong: r[1], by: r[2], n12: r[3], py12: r[4], amt12: r[5], n36: r[6], py36: r[7], last: r[8], q: r[9], deals: r[10],
@@ -23,8 +25,20 @@ function ageOk(c) {
   if (PR.age === 'all') return true;
   if (!c.by) return false;
   const a = THIS_YEAR - c.by;
-  return PR.age === 'n10' ? a <= 10 : PR.age === 'm' ? a > 10 && a <= 20 : a > 20;
+  if (PR.age === 'n10') return a <= 10;
+  if (PR.age === 'm') return a > 10 && a <= 20;
+  if (PR.age === 'o20') return a > 20 && a < 30;
+  return a >= 30;
 }
+// 금액 구간 (모드마다 기준 금액이 다름)
+function amtOf(c, m) { return m === 'rt' ? c.lastAmt : m === 'js' ? c.rent?.[1] : (c.amt12 || c.lastAmt); }
+function amtOk(c, m) {
+  const [lo, hi] = PR.amt; if (lo <= 0 && hi >= AMT_MAX) return true;
+  const v = amtOf(c, m); if (v == null) return false;
+  const eok = v / 10000;
+  return eok >= lo && (hi >= AMT_MAX || eok <= hi);
+}
+const amtTxt = (v) => (v >= AMT_MAX ? `${AMT_MAX}억+` : `${v % 1 ? v.toFixed(1) : v}억`);
 function hasMode(c, m) {
   if (m === 'rt') return c.lastAmt != null;
   if (m === 'mm') return c.py12 != null || c.py36 != null;
@@ -84,7 +98,7 @@ async function pricesRefresh() {
       const dongs = [...new Set(f.cx.map((r) => r[1]))];
       const pos = {};
       await pool(dongs, 5, async (d) => { pos[d] = await locateDong(f, d); });
-      for (const r of f.cx) { const p = pos[r[1]]; if (p && inView(p, pad)) { const c = cxObj(f, r); if (ageOk(c) && hasMode(c, m)) cand.push(c); } }
+      for (const r of f.cx) { const p = pos[r[1]]; if (p && inView(p, pad)) { const c = cxObj(f, r); if (ageOk(c) && hasMode(c, m) && amtOk(c, m)) cand.push(c); } }
     }
     cand.sort((a, b) => (b.n12 || 0) - (a.n12 || 0));
     const list = cand.slice(0, 220);
@@ -151,14 +165,36 @@ function renderPricePanel() {
   const noRent = PR.mode === 'js' && !S.meta?.rentTo;
   el.innerHTML = `<div class="zf-row"><b class="pp-t" style="--c:${m.c}">${m.ico} ${m.name}</b><span class="meta grow">${esc(m.desc)}</span></div>
     <div class="zf-row" style="margin-top:8px"><span class="lbl">연식</span>${AGES.map(([k, l]) => `<button class="pchip ${PR.age === k ? 'on' : ''}" data-age="${k}">${l}</button>`).join('')}</div>
+    <div class="amt-box">
+      <div class="zf-row"><span class="lbl">금액</span><b class="amt-val" id="amtVal">${amtTxt(PR.amt[0])} ~ ${amtTxt(PR.amt[1])}</b><span class="meta grow">${AMT_BASIS[PR.mode]} 기준</span>${PR.amt[0] > 0 || PR.amt[1] < AMT_MAX ? '<button class="pchip" data-amtreset="1">초기화</button>' : ''}</div>
+      <div class="range2" style="--lo:${PR.amt[0] / AMT_MAX * 100}%;--hi:${PR.amt[1] / AMT_MAX * 100}%;--c:${m.c}">
+        <div class="r2-track"><i></i></div>
+        <input type="range" id="amtLo" min="0" max="${AMT_MAX}" step="${AMT_STEP}" value="${PR.amt[0]}" aria-label="최소 금액">
+        <input type="range" id="amtHi" min="0" max="${AMT_MAX}" step="${AMT_STEP}" value="${PR.amt[1]}" aria-label="최대 금액">
+      </div>
+      <div class="r2-scale"><span>0억</span><span>10억</span><span>20억</span><span>30억</span><span>40억</span><span>50억+</span></div>
+    </div>
     ${noRent ? '<div class="note" style="margin:8px 0 0">전세 자료를 처음 모으는 중이에요(국토부 전월세 실거래가). 수집이 끝나면 배지가 표시돼요.</div>' : ''}
     <div class="meta" style="margin-top:6px">동 단위까지 당기면 보여요 · 많이 거래된 단지부터 최대 220곳 · 배지를 누르면 단지 세부내용</div>`;
+  const redraw = () => { for (const k of PR.shown) PR.marks[k]?.ov.setMap(null); PR.shown = new Set(); pricesRefresh(); };
   el.onclick = (e) => {
+    if (e.target.closest('[data-amtreset]')) { PR.amt = [0, AMT_MAX]; LS.set('priceAmt', PR.amt); renderPricePanel(); return redraw(); }
     const b = e.target.closest('[data-age]'); if (!b) return;
     PR.age = b.dataset.age; LS.set('priceAge', PR.age);
-    for (const k of PR.shown) PR.marks[k]?.ov.setMap(null); PR.shown = new Set();
-    renderPricePanel(); pricesRefresh();
+    renderPricePanel(); redraw();
   };
+  // 두 손잡이: 끄는 동안 숫자만 바꾸고, 놓으면 지도 갱신
+  const lo = $('#amtLo'), hi = $('#amtHi'), box = el.querySelector('.range2');
+  const sync = (who) => {
+    let a = +lo.value, b = +hi.value;
+    if (a > b - AMT_STEP) { if (who === 'lo') a = Math.max(0, b - AMT_STEP); else b = Math.min(AMT_MAX, a + AMT_STEP); lo.value = a; hi.value = b; }
+    PR.amt = [a, b];
+    box.style.setProperty('--lo', a / AMT_MAX * 100 + '%'); box.style.setProperty('--hi', b / AMT_MAX * 100 + '%');
+    $('#amtVal').textContent = `${amtTxt(a)} ~ ${amtTxt(b)}`;
+  };
+  lo.oninput = () => sync('lo'); hi.oninput = () => sync('hi');
+  const commit = () => { LS.set('priceAmt', PR.amt); renderPricePanel(); redraw(); };
+  lo.onchange = commit; hi.onchange = commit;
 }
 function pricesInit() {
   kakao.maps.event.addListener(S.map, 'idle', pricesRefresh);

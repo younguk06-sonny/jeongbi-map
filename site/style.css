@@ -473,3 +473,17 @@ body.dr-on .dr-toggle{left:min(360px,88vw)}
 body.dr-on .dr-toggle svg{transform:rotate(180deg)}
 body.dr-on:has(.drawer.tool) .dr-toggle{left:min(460px,calc(100vw - 28px))}
 .drawer.tool{width:min(460px,calc(100vw - 28px))}
+
+/* ---------- 금액 구간 (두 손잡이 막대) ---------- */
+.amt-box{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)}
+.amt-val{font-size:14px;letter-spacing:-.3px;white-space:nowrap}
+.range2{--lo:0%;--hi:100%;--c:var(--accent);position:relative;height:30px;margin:4px 6px 0}
+.r2-track{position:absolute;left:0;right:0;top:13px;height:5px;border-radius:9px;background:var(--line)}
+.r2-track i{position:absolute;left:var(--lo);right:calc(100% - var(--hi));top:0;bottom:0;border-radius:9px;background:var(--c)}
+.range2 input{position:absolute;left:-8px;right:-8px;width:calc(100% + 16px);top:3px;height:24px;margin:0;background:none;pointer-events:none;-webkit-appearance:none;appearance:none}
+.range2 input::-webkit-slider-runnable-track{background:none;height:24px}
+.range2 input::-moz-range-track{background:none}
+.range2 input::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:22px;height:22px;border-radius:50%;background:var(--card);border:2.5px solid var(--c);box-shadow:0 1px 4px rgba(0,0,0,.25);cursor:grab}
+.range2 input::-moz-range-thumb{pointer-events:auto;width:18px;height:18px;border-radius:50%;background:var(--card);border:2.5px solid var(--c);box-shadow:0 1px 4px rgba(0,0,0,.25);cursor:grab}
+.range2 input:active::-webkit-slider-thumb{cursor:grabbing;transform:scale(1.1)}
+.r2-scale{display:flex;justify-content:space-between;font-size:10px;color:var(--sub);margin:0 2px}
