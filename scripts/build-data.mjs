@@ -152,7 +152,7 @@ async function main() {
           if (by && !c.by) c.by = by;
           c.n += cnt; c.sp += mp * cnt;
           if (m12.has(m)) { c.n12 += cnt; c.sp12 += mp * cnt; c.sa12 += ma * cnt; }
-          if (m > c.last) c.last = m;
+          if (m >= c.last) { c.last = m; c.lastAmt = ma; c.lastPy = mp; c.lastN = cnt; }
           const q = qOf(m); const qq = (c.q[q] ||= [0, 0]); qq[0] += cnt; qq[1] += mp * cnt;
         }
         for (const x of part.d || []) { // [일, 단지, 동, 전용, 층, 금액, 준공]
@@ -162,6 +162,22 @@ async function main() {
       }
     }
   }
+
+  // 전세 (레이더 cache/rent, 최근 12개월) — 단지별 [전세 건수, 보증금 중위(만원), ㎡당 중위(만원/㎡×10), 월세 건수]
+  const rent = {};
+  let rentMonths = [];
+  try {
+    const rDir = path.join(SRC, 'cache', 'rent');
+    rentMonths = (await fs.readdir(rDir)).filter((f) => /^\d{6}\.json$/.test(f)).map((f) => f.slice(0, 6)).sort();
+    for (const m of rentMonths) {
+      const st = await readJSON(path.join(rDir, `${m}.json`), {});
+      for (const [code, rec] of Object.entries(st)) for (const [k, [, nj, py, dep, nw]] of Object.entries(rec.c || {})) {
+        const r = ((rent[code] ||= {})[k] ||= { n: 0, dep: 0, py: 0, w: 0, last: '' });
+        if (nj && dep) { r.n += nj; r.dep += dep * nj; r.py += py * nj; r.last = m; }
+        r.w += nw || 0;
+      }
+    }
+  } catch { console.log('전세 자료 없음(레이더 수집 전)'); }
 
   const index = {};
   for (const [code, cx] of Object.entries(acc)) {
@@ -174,14 +190,16 @@ async function main() {
         c.n12, c.n12 ? toPyeong(c.sp12 / c.n12) : null, c.n12 ? Math.round(c.sa12 / c.n12) : null,
         c.n, toPyeong(c.sp / c.n), c.last,
         quarters.map((q) => (c.q[q] ? toPyeong(c.q[q][1] / c.q[q][0]) : null)),
-        deals, c.gu
+        deals, c.gu,
+        c.lastAmt ?? null, c.lastPy != null ? toPyeong(c.lastPy) : null, c.lastN ?? null,
+        (() => { const r = rent[code]?.[k]; return r && r.n ? [r.n, Math.round(r.dep / r.n), toPyeong(r.py / r.n), r.w, r.last] : null; })()
       ];
     }).filter((r) => r[6] > 0).sort((a, b) => (b[4] || b[7]) - (a[4] || a[7]));
     if (!rows.length) continue;
     index[code] = { sd: info.sd || '', n: info.n || '', cx: rows.length };
     await writeJSON(path.join(OUT, 'near', `${code}.json`), {
       code, sd: info.sd, n: info.n, asOf: last, quarters,
-      cols: ['단지', '법정동', '준공', '12개월 건수', '12개월 평당(만원)', '12개월 거래가(만원)', '36개월 건수', '36개월 평당(만원)', '마지막 거래월', '분기별 평당', '최근 거래[계약일,전용,층,금액]', '구'],
+      cols: ['단지', '법정동', '준공', '12개월 건수', '12개월 평당(만원)', '12개월 거래가(만원)', '36개월 건수', '36개월 평당(만원)', '마지막 거래월', '분기별 평당', '최근 거래[계약일,전용,층,금액]', '구', '마지막 달 거래가 중위(만원)', '마지막 달 평당(만원)', '마지막 달 건수', '전세 12개월[건수, 보증금 중위(만원), 전용 평당(만원), 월세 건수, 마지막 달]'],
       cx: rows
     });
   }
@@ -204,7 +222,7 @@ async function main() {
   const radarMeta = await readJSON(path.join(SRC, 'public', 'data', 'meta.json'), {});
   await writeJSON(path.join(OUT, 'meta.json'), {
     builtAt: new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 16).replace('T', ' '),
-    tradeFrom: months[0], tradeTo: last, quarters,
+    tradeFrom: months[0], tradeTo: last, quarters, rentFrom: rentMonths[0] || null, rentTo: rentMonths.at(-1) || null,
     radarUpdated: radarMeta.updatedAt || radarMeta.generatedAt || null,
     codes: index
   });

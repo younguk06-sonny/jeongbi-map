@@ -437,3 +437,23 @@ a{color:var(--accent)}
 .sig-btns{gap:4px}
 .sig-btns .btn{padding:5px 0;width:36px;justify-content:center;font-size:11.5px;background:color-mix(in srgb,var(--c) 14%,var(--card));color:var(--ink)}
 .sig-btns .btn:hover{background:var(--c);color:#fff}
+
+/* ---------- 가격 레이어 (실거래가·매매가·전세가) ---------- */
+.ftabs .ft-price em:empty{display:none}
+.mk-pr{--c:#1d5fd1;position:relative;background:var(--card);border:1.5px solid var(--c);border-radius:8px;padding:2px 7px 3px;text-align:center;line-height:1.2;cursor:pointer;
+  box-shadow:0 1px 5px rgba(0,0,0,.18);white-space:nowrap;min-width:46px}
+.mk-pr::after{content:"";position:absolute;left:50%;bottom:-5px;margin-left:-4px;border:4px solid transparent;border-top-color:var(--c);border-bottom:0}
+.mk-pr b{display:block;font-size:12px;font-weight:800;color:var(--c);letter-spacing:-.3px}
+.mk-pr small{display:block;font-size:9.5px;color:var(--sub);font-weight:600;max-width:96px;overflow:hidden;text-overflow:ellipsis}
+.mk-pr.n::before,.mk-pr.m::before{content:"";position:absolute;right:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--new);border:1.5px solid var(--card)}
+.mk-pr.m::before{background:var(--mid)}
+.mk-pr.faint{opacity:.7}
+.mk-pr.sel{background:var(--c);z-index:20;transform:scale(1.1)}
+.mk-pr.sel b,.mk-pr.sel small{color:#fff}
+.pp-t{--c:var(--accent);color:var(--c);font-size:14px;white-space:nowrap;margin-right:4px}
+.pr-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:0 0 12px}
+.pr-box{--c:var(--accent);position:relative;border-radius:12px;padding:9px 10px 9px 13px;background:color-mix(in srgb,var(--c) 6%,var(--card));border:1px solid color-mix(in srgb,var(--c) 18%,var(--line));overflow:hidden}
+.pr-box::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c)}
+.pr-box small{display:block;font-size:11px;color:var(--sub);font-weight:700}
+.pr-box b{display:block;font-size:18px;margin:2px 0 1px;letter-spacing:-.4px}
+.pr-box span{display:block;font-size:11px;color:var(--sub)}

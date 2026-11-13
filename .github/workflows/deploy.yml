@@ -33,6 +33,7 @@ jobs:
           sparse-checkout: |
             lib
             cache/rt
+            cache/rent
             public/data
 
       - uses: actions/setup-node@v4

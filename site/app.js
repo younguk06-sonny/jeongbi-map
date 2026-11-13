@@ -135,6 +135,7 @@ async function init() {
   refineSites();
   zonesInit();
   salesInit();
+  pricesInit();
   const id = decodeURIComponent((location.hash.match(/site=([^&]+)/) || [])[1] || '');
   if (id && S.sites.find((s) => s.id === id)) selectSite(id); else fitAll();
   addEventListener('hashchange', () => { const m = location.hash.match(/site=([^&]+)/); if (m && decodeURIComponent(m[1]) !== S.sel?.id) selectSite(decodeURIComponent(m[1])); });
@@ -147,7 +148,7 @@ function bindUI() {
   $('#shHead').addEventListener('click', (e) => { if (e.target.closest('.x')) return closeSite(); if (!$('#sheet').classList.contains('open')) setSheet('open'); });
   $('#btnSet').addEventListener('click', openSettings);
   $('#btnStudy').addEventListener('click', () => { openDrawer(true); setTimeout(() => $('#drStudy').scrollIntoView({ block: 'end' }), 280); });
-  $('#ftabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) openTab(b.dataset.p); });
+  $('#ftabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; if (PRICE_MODES[b.dataset.p]) priceTab(b.dataset.p); else openTab(b.dataset.p); });
   regionBind();
   $('#btnMe').addEventListener('click', locateMe);
   $('#btnCad').addEventListener('click', () => setCadastral(!S.cadastral));
@@ -193,6 +194,8 @@ function openTab(p) { // 상단 조건 탭 펼치기/접기
   $('#sitePanel').classList.toggle('on', next === 'sites');
   $('#zfilter').classList.toggle('on', next === 'zones');
   $('#salePanel').classList.toggle('on', next === 'sale');
+  $('#pricePanel').classList.toggle('on', next === 'price');
+  $$('#ftabs .ft-price').forEach((b) => b.classList.toggle('open', next === 'price' && b.dataset.p === PR.mode));
   $$('#ftabs button').forEach((b) => b.classList.toggle('open', b.dataset.p === next));
   if (next === 'sites') renderChips();
 }
@@ -252,17 +255,18 @@ async function selectSite(id) {
   const s = typeof id === 'object' ? id : S.sites.find((x) => x.id === id); if (!s) return;
   if (!s.zone) clearZoneSel();
   if (!s.sale) clearSaleSel();
+  if (!s.cx) clearCxSel();
   id = s.id;
   if (!$('#v-map').classList.contains('on')) showView('map');
   S.sel = s; S.sheetTab = S.sheetTab || 'info';
   history.replaceState(null, '', s.zone ? location.pathname : '#site=' + encodeURIComponent(id));
-  const ours = !s.zone && !s.sale;
+  const ours = !s.zone && !s.sale && !s.cx;
   $('#ftabs .ft-site').classList.toggle('on', ours);
   $('#ftabs .ft-site span').textContent = ours ? '🏗️ ' + s.name : '🏗️ 당사 사업장';
   Object.entries(S.siteMarks).forEach(([k, m]) => { m.el.classList.toggle('sel', k === id); m.el.classList.toggle('dim', !s.zone && k !== id); });
   if (!S.map) return;
   const p = sitePoint(s);
-  if ((s.zone || s.sale) && S.map.getLevel() <= levelFor(settings.radius)) S.map.panTo(new kakao.maps.LatLng(p.lat - latShift(settings.radius) * S.map.getLevel() / levelFor(settings.radius), p.lng));
+  if ((s.zone || s.sale || s.cx) && S.map.getLevel() <= levelFor(settings.radius)) S.map.panTo(new kakao.maps.LatLng(p.lat - latShift(settings.radius) * S.map.getLevel() / levelFor(settings.radius), p.lng));
   else { S.map.setLevel(levelFor(settings.radius)); S.map.setCenter(new kakao.maps.LatLng(p.lat - latShift(settings.radius), p.lng)); }
   drawCircle(); if (S.map) drawAreas();
   S.an = { site: s, status: '주변 자료 찾는 중…', prog: 0, cx: null, ch: null, addr: '' };
@@ -271,7 +275,7 @@ async function selectSite(id) {
   analyze(s);
 }
 function closeSite() {
-  S.sel = null; S.an = null; clearLayer(); clearZoneSel(); clearSaleSel();
+  S.sel = null; S.an = null; clearLayer(); clearZoneSel(); clearSaleSel(); clearCxSel();
   if (S.circle) { S.circle.setMap(null); S.circle = null; }
   Object.values(S.siteMarks).forEach((m) => m.el.classList.remove('sel', 'dim'));
   $('#ftabs .ft-site').classList.remove('on'); $('#ftabs .ft-site span').textContent = '🏗️ 당사 사업장';
@@ -422,7 +426,7 @@ function renderSheet() {
   const k = (lbl, v, unit) => `<div class="kpi"><small>${lbl}</small><b class="num">${v}${unit ? `<em>${unit}</em>` : ''}</b></div>`;
   $('#shHead').innerHTML = `
     <div class="sh-title"><h2>${esc(s.name)}</h2><button class="x" title="닫기">✕</button></div>
-    <div class="sh-sub">${s.sale ? `<span class="badge" style="--c:${saleColor(s.sale.__t)}">${s.sale.__t === 'apt' ? '아파트' : '오피스텔·도시형'}</span>${esc(s.stage)} · ${fmtN(s.sale.total)}세대` : s.zone ? `<span class="badge" style="--c:${zColor(s.zone)}">${esc(zShort(s.zone))}</span>${esc(s.stage)} · ${fmtN(s.zone.a / 3.3058)}평` : `<span class="badge" style="--c:${typeColor(s.type)}">${esc(s.type)}</span>${fmtN(s.households)}세대 · ${esc(s.stage)}`}</div>
+    <div class="sh-sub">${s.cx ? `<span class="badge" style="--c:${PRICE_MODES.mm.c}">아파트</span>${s.cx.by ? `${s.cx.by}년 준공 · ` : ''}${esc(s.cx.sgg)} ${esc(s.cx.dong)}` : s.sale ? `<span class="badge" style="--c:${saleColor(s.sale.__t)}">${s.sale.__t === 'apt' ? '아파트' : '오피스텔·도시형'}</span>${esc(s.stage)} · ${fmtN(s.sale.total)}세대` : s.zone ? `<span class="badge" style="--c:${zColor(s.zone)}">${esc(zShort(s.zone))}</span>${esc(s.stage)} · ${fmtN(s.zone.a / 3.3058)}평` : `<span class="badge" style="--c:${typeColor(s.type)}">${esc(s.type)}</span>${fmtN(s.households)}세대 · ${esc(s.stage)}`}</div>
     <div class="kpis">
       ${k(`${fmtR(settings.radius)} 평균 평당`, sm?.all ? fmtN(sm.all.v) : (S.an?.cx ? '–' : '…'), sm?.all ? '만' : '')}
       ${k('10년 이내 평당', sm?.nw ? fmtN(sm.nw.v) : (S.an?.cx ? '–' : '…'), sm?.nw ? '만' : '')}
@@ -446,6 +450,7 @@ function renderSheetBody() {
 function infoHTML(s, an) {
   if (s.zone) return zoneInfoHTML(s, an);
   if (s.sale) return saleInfoHTML(s, an);
+  if (s.cx) return cxInfoHTML(s, an);
   return `
     <dl class="dl">
       <dt>사업유형</dt><dd>${esc(s.type)}</dd>
@@ -579,7 +584,7 @@ function clearLayer() { S.layer.forEach((o) => o.setMap(null)); S.layer = []; S.
 function drawLayer() {
   clearLayer(); const an = S.an; if (!an || !S.map) return;
   const lvl = S.map.getLevel();
-  for (const r of (an.cx || []).filter((x) => x.d <= settings.radius)) {
+  for (const r of (PR.mode ? [] : (an.cx || []).filter((x) => x.d <= settings.radius))) { // 가격 탭이 켜져 있으면 그 배지를 씀
     const el = document.createElement('div'); el.className = 'mk-cx ' + ageCls(r.by);
     const v = r.py12 || r.py36;
     el.innerHTML = `${v ? fmtN(v) : '–'}${lvl <= 4 ? `<small>${esc(r.apt)}</small>` : ''}`;
