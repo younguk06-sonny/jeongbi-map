@@ -1,18 +1,28 @@
-/* 정비맵 — 부동산 스터디 (아실식 지표 모음)
+/* 정비맵 — 지역 시그널 (지금 보는 지역의 시장 신호판)
    청약 · 실거래가 · 가격 비교 · 여러 단지 비교 · 공급량 · 미분양 · 개발호재
    자료: data/study.json (분양시장 레이더 자료를 매일 요약), data/near/*.json, data/cheongyak/*.json */
 'use strict';
 
+// 단색 선 아이콘 (24×24, currentColor)
+const ICON = {
+  rt: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+  us: '<path d="M3 11l9-7 9 7v8.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5z"/><path d="M10 13.5l4 4M14 13.5l-4 4"/>',
+  sp: '<rect x="3" y="12" width="5" height="9" rx="1"/><rect x="9.5" y="5" width="5" height="16" rx="1"/><rect x="16" y="9" width="5" height="12" rx="1"/>',
+  cy: '<path d="M4 9.5v5a1 1 0 0 0 1 1h3l6 4.5v-16L8 8.5H5a1 1 0 0 0-1 1z"/><path d="M17.5 9a4.5 4.5 0 0 1 0 6"/>',
+  dv: '<rect x="5" y="3" width="14" height="13" rx="3"/><path d="M5 10h14M8.5 20.5l2-4.5M15.5 20.5l-2-4.5"/>',
+  cmp: '<path d="M5 20V11M12 20V4M19 20v-6"/><path d="M3 20h18"/>',
+};
+const ico = (k, cls = 'si') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg>`;
 const STUDY_TOOLS = [
-  { id: 'cy', name: '청약', ico: '📢', bg: '#fff1e6' },
-  { id: 'rt', name: '실거래가', ico: '💰', bg: '#e8f4ff' },
-  { id: 'vs', name: '가격 비교', ico: 'VS', bg: '#f1f3f5', txt: 1 },
-  { id: 'mc', name: '여러 단지 비교', ico: '📊', bg: '#eef9f1' },
-  { id: 'sp', name: '공급량', ico: '🏗️', bg: '#fff8e1' },
-  { id: 'us', name: '미분양', ico: '🏚️', bg: '#fdecef' },
-  { id: 'dv', name: '개발호재', ico: '🚆', bg: '#efeefe' },
+  { id: 'rt', name: '실거래가', icon: 'rt' },
+  { id: 'us', name: '미분양', icon: 'us' },
+  { id: 'sp', name: '공급량', icon: 'sp' },
+  { id: 'cy', name: '청약', icon: 'cy' },
+  { id: 'dv', name: '개발호재', icon: 'dv' },
+  { id: 'vs', name: '1:1 가격 비교', icon: 'cmp' },
+  { id: 'mc', name: '여러 단지 비교', icon: 'cmp' },
 ];
-const ST = { data: null, tool: null, level: null, range: 36, usRange: 60, cmp: LS.get('cmp', []), pick: '', projStatus: '전체' };
+const ST = { data: null, tool: null, level: null, range: 36, usRange: 60, cmp: LS.get('cmp', []), pick: '', projStatus: '전체', fold: LS.get('sigFold', false), sigN: 0 };
 const CMP_MAX = 6;
 const SERIES = matchMedia('(prefers-color-scheme: dark)').matches
   ? ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300']
@@ -23,12 +33,77 @@ async function studyData() {
   return ST.data;
 }
 
-// ---------- 그리드 ----------
-function renderStudyGrid() {
+// ---------- 지역 시그널 (왼쪽 창 아래 신호판) ----------
+function spark(vals, kind = 'line', color = 'var(--accent)') {
+  const v = vals.map((x) => (x == null ? null : +x)); const ok = v.filter((x) => x != null);
+  if (ok.length < 2) return '<span class="spk"></span>';
+  const W = 64, H = 22, lo = kind === 'bar' ? 0 : Math.min(...ok), hi = Math.max(...ok) || 1;
+  const X = (i) => (kind === 'bar' ? (i + 0.5) * W / v.length : i * W / (v.length - 1)), Y = (x) => H - 2 - ((x - lo) / (hi - lo || 1)) * (H - 4);
+  if (kind === 'bar') {
+    const bw = Math.max(1.2, W / v.length - 1);
+    return `<svg class="spk" viewBox="0 0 ${W} ${H}">${v.map((x, i) => x == null ? '' : `<rect x="${X(i) - bw / 2}" y="${Y(x)}" width="${bw}" height="${H - 2 - Y(x)}" rx=".6" style="fill:${color}"/>`).join('')}</svg>`;
+  }
+  let d = '', pen = false; v.forEach((x, i) => { if (x == null) { pen = false; return; } d += (pen ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(x).toFixed(1); pen = true; });
+  const li = v.map((x, i) => [x, i]).filter((p) => p[0] != null).pop();
+  return `<svg class="spk" viewBox="0 0 ${W} ${H}"><path d="${d}" style="fill:none;stroke:${color}" stroke-width="1.6" stroke-linejoin="round"/><circle cx="${X(li[1])}" cy="${Y(li[0])}" r="2" style="fill:${color}"/></svg>`;
+}
+const delta = (p, txt) => (p == null ? '' : `<span class="dl ${pctCls(p)}">${txt ?? pctTxt(p)}</span>`);
+
+async function signals(d, sc) {
+  const out = {};
+  // 실거래가
+  const t = d.trade, ts = t && tradeSeries(d, sc);
+  if (ts) {
+    const L = completeLen(t), p3 = wavg(ts.py, ts.n, L - 3, L), pp = wavg(ts.py, ts.n, L - 15, L - 12);
+    out.rt = { v: p3 ? `${fmtN(p3)}<small>만/평</small>` : '–', sub: delta(pct(p3, pp), pctTxt(pct(p3, pp), '')) + `<span class="cap">최근 3개월</span>`, spk: spark(ts.py.slice(Math.max(0, L - 24), L)) };
+  }
+  // 미분양
+  const u = d.unsold;
+  if (u) {
+    const v = sc.lv === 'nat' ? u.nat : sc.lv === 'sd' ? u.sido[sc.sd] : (() => { const k = sggKey(u.sgg[sc.sd], sc.sgg); return k ? u.sgg[sc.sd][k] : null; })();
+    if (v) {
+      const L = v.length, c = v[L - 1], dd = c - v[L - 2];
+      out.us = { v: `${fmtN(c)}<small>호</small>`, sub: delta(dd, (dd >= 0 ? '+' : '') + fmtN(dd)) + `<span class="cap">${ymLabel(u.months[L - 1])} · 전월비</span>`, spk: spark(v.slice(-36), 'line', '#e34948') };
+    }
+  }
+  // 공급량 (인허가, 시도 단위)
+  const sp = d.supply, key = sc.lv === 'nat' ? 'nat' : sc.sd, pv = sp?.series?.permit?.[key];
+  if (pv) {
+    const L = pv.length, a = sum(pv.slice(L - 12)), b = sum(pv.slice(L - 24, L - 12));
+    out.sp = { v: `${fmtK(a)}<small>호</small>`, sub: delta(pct(a, b), pctTxt(pct(a, b), '')) + `<span class="cap">인허가 12개월${sc.lv === 'sgg' ? ' · ' + esc(sc.sd) : ''}</span>`, spk: spark(pv.slice(-24), 'bar', '#8fb3ea') };
+  }
+  // 청약
+  const sds = sc.lv === 'nat' ? SIDO : [sc.sd];
+  let items = (await Promise.all(sds.map((sd) => loadCh(sd)))).flat();
+  if (sc.lv === 'sgg') { const f = sc.sgg.split(' ')[0]; items = items.filter((it) => (it.sgg || '').includes(f) || (it.addr || '').includes(f)); }
+  const up = items.filter((it) => it.winner >= TODAY).length;
+  const y1 = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
+  const past = items.filter((it) => it.winner < TODAY && it.date >= y1), comps = past.map((it) => it.comp?.avg1).filter((x) => x != null);
+  out.cy = { v: `${up}<small>건 예정</small>`, sub: `<span class="cap">최근 1년 ${past.length}건${comps.length ? ` · 평균 ${(sum(comps) / comps.length).toFixed(1)}:1` : ''}</span>` };
+  // 개발호재
+  const P = d.projects?.projects || [];
+  const pj = sc.lv === 'nat' ? P : P.filter((p) => (p.regions || []).some(([sd, sg]) => sd === sc.sd && (sc.lv === 'sd' || !sg || sc.sgg.startsWith(sg) || sg.startsWith(sc.sgg.split(' ')[0]))));
+  out.dv = { v: `${pj.length}<small>건</small>`, sub: `<span class="cap">${pj.length ? esc(pj.slice(0, 2).map((p) => p.name.split(' (')[0]).join(', ')) : '등록된 사업 없음'}</span>` };
+  return out;
+}
+
+async function renderStudyGrid() {
   const el = $('#drStudy'); if (!el) return;
-  el.innerHTML = `<div class="sg-h">부동산 스터디 <small>${esc(scopeLabel(scopeNow()))} 기준</small></div>
-    <div class="sg-grid">${STUDY_TOOLS.map((t) => `<button class="sg-cell" data-tool="${t.id}"><span class="sg-ico${t.txt ? ' txt' : ''}" style="background:${t.bg}">${t.ico}</span><b>${t.name}</b>${(t.id === 'vs' || t.id === 'mc') && ST.cmp.length ? `<em>${ST.cmp.length}</em>` : ''}</button>`).join('')}</div>`;
-  el.onclick = (e) => { const b = e.target.closest('[data-tool]'); if (b) openTool(b.dataset.tool); };
+  const sc = scopeNow(), n = ++ST.sigN;
+  const head = `<button class="sig-h" data-fold="1"><span class="sig-t">지역 시그널</span><span class="sig-w">${esc(scopeLabel(sc))}</span><i>${ST.fold ? '▴' : '▾'}</i></button>`;
+  const row = (id, s, name) => `<button class="sig-row" data-tool="${id}">${ico(STUDY_TOOLS.find((x) => x.id === id).icon)}<span class="sig-n">${name}</span><span class="sig-v"><b class="num">${s?.v ?? '…'}</b><span class="sig-s">${s?.sub ?? ''}</span></span>${s?.spk ?? '<span class="spk"></span>'}</button>`;
+  const cmpRow = `<div class="sig-row cmp">${ico('cmp')}<span class="sig-n">단지 비교</span><span class="sig-v"><b class="num">${ST.cmp.length}<small>곳 담김</small></b><span class="sig-s"><span class="cap">＋ 버튼으로 담기</span></span></span><span class="sig-btns"><button class="btn sm" data-tool="vs">1:1</button><button class="btn sm" data-tool="mc">여럿</button></span></div>`;
+  const draw = (S_) => {
+    if (n !== ST.sigN) return;
+    el.classList.toggle('fold', ST.fold);
+    el.innerHTML = head + `<div class="sig-list">${row('rt', S_.rt, '실거래가')}${row('us', S_.us, '미분양')}${row('sp', S_.sp, '공급량')}${row('cy', S_.cy, '청약')}${row('dv', S_.dv, '개발호재')}${cmpRow}</div>`;
+  };
+  draw({});
+  el.onclick = (e) => {
+    if (e.target.closest('[data-fold]')) { ST.fold = !ST.fold; LS.set('sigFold', ST.fold); el.classList.toggle('fold', ST.fold); el.querySelector('.sig-h i').textContent = ST.fold ? '▴' : '▾'; return; }
+    const b = e.target.closest('[data-tool]'); if (b) openTool(b.dataset.tool);
+  };
+  try { draw(await signals(await studyData(), sc)); } catch (e) { console.error(e); }
 }
 
 // ---------- 지역 범위 ----------
@@ -68,7 +143,7 @@ async function openTool(id) {
   openDrawer(true);
   $('#drawer').classList.add('tool');
   const t = STUDY_TOOLS.find((x) => x.id === id);
-  $('#drTool').innerHTML = `<div class="tl-head"><button class="btn sm" data-back="1">← 스터디</button><b>${t.txt ? '' : t.ico + ' '}${t.name}</b></div><div class="tl-body" id="tlBody"><div class="empty">불러오는 중…</div></div>`;
+  $('#drTool').innerHTML = `<div class="tl-head"><button class="x" data-back="1" title="시그널로 돌아가기">←</button>${ico(t.icon, 'si big')}<b>${t.name}</b><span class="tl-w">지역 시그널</span></div><div class="tl-body" id="tlBody"><div class="empty">불러오는 중…</div></div>`;
   $('#drTool').onclick = onToolClick;
   $('#drTool').oninput = onToolInput;
   await renderTool();
@@ -203,8 +278,8 @@ async function toolCheongyak() {
       ${kpi('평균 1순위 경쟁률', comps.length ? (sum(comps) / comps.length).toFixed(1) + ':1' : '–')}
       ${kpi('전용 평당 분양가', sn ? fmtN(ss / sn) + '만' : '–')}
     </div>`
-    + sec('📢 접수 예정·진행', up.length + '건') + (up.length ? `<div class="card flat">${up.map((it) => chCard(Object.assign({}, it, { d: null }), false)).join('')}</div>` : '<div class="meta pad">예정된 청약이 없어요</div>')
-    + sec('📊 최근 1년 분양 결과', past.length + '건') + (past.length ? `<div class="card flat">${past.slice(0, 60).map((it) => chCard(Object.assign({}, it, { d: null }), false)).join('')}</div>` : '<div class="meta pad">최근 1년 분양이 없어요</div>')
+    + sec('접수 예정·진행', up.length + '건') + (up.length ? `<div class="card flat">${up.map((it) => chCard(Object.assign({}, it, { d: null }), false)).join('')}</div>` : '<div class="meta pad">예정된 청약이 없어요</div>')
+    + sec('최근 1년 분양 결과', past.length + '건') + (past.length ? `<div class="card flat">${past.slice(0, 60).map((it) => chCard(Object.assign({}, it, { d: null }), false)).join('')}</div>` : '<div class="meta pad">최근 1년 분양이 없어요</div>')
     + '<div class="note">청약홈 입주자모집공고 기준. 평당 분양가는 전용면적 기준이에요.</div>';
 }
 
