@@ -416,3 +416,24 @@ a{color:var(--accent)}
 .badge.st-soon{--c:#f08c00}.badge.st-now{--c:#e03131}.badge.st-done{--c:#868e96}.badge.st-old{--c:#adb5bd}
 .stagebar.sale .st span b{font-weight:700;color:var(--ink)}
 .upc{color:#d6336c}.downc{color:#1c7ed6}
+
+/* ---------- 지역 세부내용: 같은 칸 간격 · 지표별 색 ---------- */
+.sig-list{gap:6px}
+.sig-row,.sig-row.cmp{--c:var(--accent);position:relative;display:grid;grid-template-columns:30px 64px minmax(0,1fr) 76px;column-gap:10px;align-items:center;
+  height:58px;min-height:0;padding:0 10px 0 13px;border-radius:12px;overflow:hidden;
+  background:color-mix(in srgb,var(--c) 5%,var(--card));border:1px solid color-mix(in srgb,var(--c) 16%,var(--line))}
+.sig-row::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c)}
+.sig-row:hover{outline:none;border-color:var(--c);background:color-mix(in srgb,var(--c) 10%,var(--card))}
+.sig-row.cmp:hover{border-color:color-mix(in srgb,var(--c) 16%,var(--line));background:color-mix(in srgb,var(--c) 5%,var(--card))}
+.sig-ic{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--c) 15%,transparent)}
+.sig-ic.big{width:32px;height:32px}
+.sig-ic .si{width:18px;height:18px;stroke:var(--c)}
+.sig-n{font-size:12.5px;font-weight:800;color:var(--ink)}
+.sig-v b{font-size:15px}
+.sig-r{display:flex;align-items:center;justify-content:flex-end;width:76px;height:100%}
+.sig-r .spk{width:72px;height:24px}
+.spk.stk{display:flex;gap:2px;height:10px !important;border-radius:4px;overflow:hidden;align-self:center}
+.spk.stk i{display:block;height:100%;min-width:4px}
+.sig-btns{gap:4px}
+.sig-btns .btn{padding:5px 0;width:36px;justify-content:center;font-size:11.5px;background:color-mix(in srgb,var(--c) 14%,var(--card));color:var(--ink)}
+.sig-btns .btn:hover{background:var(--c);color:#fff}

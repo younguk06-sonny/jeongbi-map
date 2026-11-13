@@ -13,15 +13,17 @@ const ICON = {
   cmp: '<path d="M5 20V11M12 20V4M19 20v-6"/><path d="M3 20h18"/>',
 };
 const ico = (k, cls = 'si') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg>`;
+// 지표마다 고유 색 (아이콘 칸·왼쪽 띠·추이선에 같은 색)
 const STUDY_TOOLS = [
-  { id: 'rt', name: '실거래가', icon: 'rt' },
-  { id: 'us', name: '미분양', icon: 'us' },
-  { id: 'sp', name: '공급량', icon: 'sp' },
-  { id: 'cy', name: '청약', icon: 'cy' },
-  { id: 'dv', name: '개발호재', icon: 'dv' },
-  { id: 'vs', name: '1:1 가격 비교', icon: 'cmp' },
-  { id: 'mc', name: '여러 단지 비교', icon: 'cmp' },
+  { id: 'rt', name: '실거래가', icon: 'rt', c: '#2a78d6' },
+  { id: 'us', name: '미분양', icon: 'us', c: '#e34948' },
+  { id: 'sp', name: '공급량', icon: 'sp', c: '#d99400' },
+  { id: 'cy', name: '청약', icon: 'cy', c: '#1baf7a' },
+  { id: 'dv', name: '개발호재', icon: 'dv', c: '#6250d6' },
+  { id: 'vs', name: '1:1 가격 비교', icon: 'cmp', c: '#eb6834' },
+  { id: 'mc', name: '여러 단지 비교', icon: 'cmp', c: '#eb6834' },
 ];
+const toolColor = (id) => (STUDY_TOOLS.find((x) => x.id === id) || STUDY_TOOLS[0]).c;
 const ST = { data: null, tool: null, level: null, range: 36, usRange: 60, cmp: LS.get('cmp', []), pick: '', projStatus: '전체', fold: LS.get('sigFold', false), sigN: 0 };
 const CMP_MAX = 6;
 const SERIES = matchMedia('(prefers-color-scheme: dark)').matches
@@ -55,7 +57,7 @@ async function signals(d, sc) {
   const t = d.trade, ts = t && tradeSeries(d, sc);
   if (ts) {
     const L = completeLen(t), p3 = wavg(ts.py, ts.n, L - 3, L), pp = wavg(ts.py, ts.n, L - 15, L - 12);
-    out.rt = { v: p3 ? `${fmtN(p3)}<small>만/평</small>` : '–', sub: delta(pct(p3, pp), pctTxt(pct(p3, pp), '')) + `<span class="cap">최근 3개월</span>`, spk: spark(ts.py.slice(Math.max(0, L - 24), L)) };
+    out.rt = { v: p3 ? `${fmtN(p3)}<small>만/평</small>` : '–', sub: delta(pct(p3, pp), pctTxt(pct(p3, pp), '')) + `<span class="cap">최근 3개월</span>`, spk: spark(ts.py.slice(Math.max(0, L - 24), L), 'line', toolColor('rt')) };
   }
   // 미분양
   const u = d.unsold;
@@ -63,14 +65,14 @@ async function signals(d, sc) {
     const v = sc.lv === 'nat' ? u.nat : sc.lv === 'sd' ? u.sido[sc.sd] : (() => { const k = sggKey(u.sgg[sc.sd], sc.sgg); return k ? u.sgg[sc.sd][k] : null; })();
     if (v) {
       const L = v.length, c = v[L - 1], dd = c - v[L - 2];
-      out.us = { v: `${fmtN(c)}<small>호</small>`, sub: delta(dd, (dd >= 0 ? '+' : '') + fmtN(dd)) + `<span class="cap">${ymLabel(u.months[L - 1])} · 전월비</span>`, spk: spark(v.slice(-36), 'line', '#e34948') };
+      out.us = { v: `${fmtN(c)}<small>호</small>`, sub: delta(dd, (dd >= 0 ? '+' : '') + fmtN(dd)) + `<span class="cap">${ymLabel(u.months[L - 1])} · 전월비</span>`, spk: spark(v.slice(-36), 'line', toolColor('us')) };
     }
   }
   // 공급량 (인허가, 시도 단위)
   const sp = d.supply, key = sc.lv === 'nat' ? 'nat' : sc.sd, pv = sp?.series?.permit?.[key];
   if (pv) {
     const L = pv.length, a = sum(pv.slice(L - 12)), b = sum(pv.slice(L - 24, L - 12));
-    out.sp = { v: `${fmtK(a)}<small>호</small>`, sub: delta(pct(a, b), pctTxt(pct(a, b), '')) + `<span class="cap">인허가 12개월${sc.lv === 'sgg' ? ' · ' + esc(sc.sd) : ''}</span>`, spk: spark(pv.slice(-24), 'bar', '#8fb3ea') };
+    out.sp = { v: `${fmtK(a)}<small>호</small>`, sub: delta(pct(a, b), pctTxt(pct(a, b), '')) + `<span class="cap">인허가 12개월${sc.lv === 'sgg' ? ' · ' + esc(sc.sd) : ''}</span>`, spk: spark(pv.slice(-24), 'bar', toolColor('sp')) };
   }
   // 청약
   const sds = sc.lv === 'nat' ? SIDO : [sc.sd];
@@ -79,11 +81,18 @@ async function signals(d, sc) {
   const up = items.filter((it) => it.winner >= TODAY).length;
   const y1 = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
   const past = items.filter((it) => it.winner < TODAY && it.date >= y1), comps = past.map((it) => it.comp?.avg1).filter((x) => x != null);
-  out.cy = { v: `${up}<small>건 예정</small>`, sub: `<span class="cap">최근 1년 ${past.length}건${comps.length ? ` · 평균 ${(sum(comps) / comps.length).toFixed(1)}:1` : ''}</span>` };
+  // 최근 12개월 월별 분양 건수 막대
+  const mon = Array.from({ length: 12 }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 11 + i); return d.toISOString().slice(0, 7); });
+  const byMon = mon.map((m) => items.filter((it) => (it.date || '').startsWith(m)).length);
+  out.cy = { spk: spark(byMon, 'bar', toolColor('cy')), v: `${up}<small>건 예정</small>`, sub: `<span class="cap">최근 1년 ${past.length}건${comps.length ? ` · 평균 ${(sum(comps) / comps.length).toFixed(1)}:1` : ''}</span>` };
   // 개발호재
   const P = d.projects?.projects || [];
   const pj = sc.lv === 'nat' ? P : P.filter((p) => (p.regions || []).some(([sd, sg]) => sd === sc.sd && (sc.lv === 'sd' || !sg || sc.sgg.startsWith(sg) || sg.startsWith(sc.sgg.split(' ')[0]))));
-  out.dv = { v: `${pj.length}<small>건</small>`, sub: `<span class="cap">${pj.length ? esc(pj.slice(0, 2).map((p) => p.name.split(' (')[0]).join(', ')) : '등록된 사업 없음'}</span>` };
+  // 단계별 비율 막대 (운영·공사·인허가·계획)
+  const stc = [['운영', 1], ['부분 운영', .8], ['공사', .6], ['인허가·설계', .4], ['계획', .22]];
+  const seg = stc.map(([st, o]) => [pj.filter((p) => p.status === st).length, o]).filter((x) => x[0]);
+  const tot = sum(seg.map((x) => x[0]));
+  out.dv = { spk: tot ? `<span class="spk stk" title="${esc(stc.map(([st]) => `${st} ${pj.filter((p) => p.status === st).length}`).join(' · '))}">${seg.map(([n, o]) => `<i style="flex:${n};background:${toolColor('dv')};opacity:${o}"></i>`).join('')}</span>` : '', v: `${pj.length}<small>건</small>`, sub: `<span class="cap">${pj.length ? esc(pj.slice(0, 2).map((p) => p.name.split(' (')[0]).join(', ')) : '등록된 사업 없음'}</span>` };
   return out;
 }
 
@@ -91,8 +100,8 @@ async function renderStudyGrid() {
   const el = $('#drStudy'); if (!el) return;
   const sc = scopeNow(), n = ++ST.sigN;
   const head = `<button class="sig-h" data-fold="1"><span class="sig-t">지역 세부내용</span><span class="sig-w">${esc(scopeLabel(sc))}</span><i>${ST.fold ? '▴' : '▾'}</i></button>`;
-  const row = (id, s, name) => `<button class="sig-row" data-tool="${id}">${ico(STUDY_TOOLS.find((x) => x.id === id).icon)}<span class="sig-n">${name}</span><span class="sig-v"><b class="num">${s?.v ?? '…'}</b><span class="sig-s">${s?.sub ?? ''}</span></span>${s?.spk ?? '<span class="spk"></span>'}</button>`;
-  const cmpRow = `<div class="sig-row cmp">${ico('cmp')}<span class="sig-n">단지 비교</span><span class="sig-v"><b class="num">${ST.cmp.length}<small>곳 담김</small></b><span class="sig-s"><span class="cap">＋ 버튼으로 담기</span></span></span><span class="sig-btns"><button class="btn sm" data-tool="vs">1:1</button><button class="btn sm" data-tool="mc">여럿</button></span></div>`;
+  const row = (id, s, name) => `<button class="sig-row" data-tool="${id}" style="--c:${toolColor(id)}"><span class="sig-ic">${ico(STUDY_TOOLS.find((x) => x.id === id).icon)}</span><span class="sig-n">${name}</span><span class="sig-v"><b class="num">${s?.v ?? '…'}</b><span class="sig-s">${s?.sub ?? ''}</span></span><span class="sig-r">${s?.spk || '<span class="spk"></span>'}</span></button>`;
+  const cmpRow = `<div class="sig-row cmp" style="--c:${toolColor('vs')}"><span class="sig-ic">${ico('cmp')}</span><span class="sig-n">단지 비교</span><span class="sig-v"><b class="num">${ST.cmp.length}<small>곳 담김</small></b><span class="sig-s"><span class="cap">＋ 버튼으로 담기</span></span></span><span class="sig-r sig-btns"><button class="btn sm" data-tool="vs">1:1</button><button class="btn sm" data-tool="mc">여럿</button></span></div>`;
   const draw = (S_) => {
     if (n !== ST.sigN) return;
     el.classList.toggle('fold', ST.fold);
@@ -143,7 +152,7 @@ async function openTool(id) {
   openDrawer(true);
   $('#drawer').classList.add('tool');
   const t = STUDY_TOOLS.find((x) => x.id === id);
-  $('#drTool').innerHTML = `<div class="tl-head"><button class="x" data-back="1" title="지역 세부내용으로 돌아가기">←</button>${ico(t.icon, 'si big')}<b>${t.name}</b><span class="tl-w">지역 세부내용</span></div><div class="tl-body" id="tlBody"><div class="empty">불러오는 중…</div></div>`;
+  $('#drTool').innerHTML = `<div class="tl-head"><button class="x" data-back="1" title="지역 세부내용으로 돌아가기">←</button><span class="sig-ic big" style="--c:${t.c}">${ico(t.icon, 'si')}</span><b>${t.name}</b><span class="tl-w">지역 세부내용</span></div><div class="tl-body" id="tlBody"><div class="empty">불러오는 중…</div></div>`;
   $('#drTool').onclick = onToolClick;
   $('#drTool').oninput = onToolInput;
   await renderTool();
