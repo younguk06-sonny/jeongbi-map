@@ -117,7 +117,7 @@ async function init() {
   bindUI();
   try {
     const [sites, meta] = await Promise.all([getJSON('data/sites.json'), getJSON('data/meta.json').catch(() => null)]);
-    S.sites = sites.sites; S.meta = meta; fixGuNames(meta);
+    S.sites = sites.sites; S.sitesAsOf = sites.asOf || ''; S.meta = meta; fixGuNames(meta);
     if (meta) $('#asOf').textContent = `실거래가 ${fmtYm(meta.tradeTo)}까지 · ${meta.builtAt.slice(5, 10).replace('-', '.')} 갱신`;
   } catch (e) { $('#mapMsg').textContent = '사업장 자료를 불러오지 못했어요. 잠시 뒤 새로고침해 주세요.'; return; }
   renderChips(); renderSites(); renderSaved();
@@ -142,9 +142,10 @@ async function init() {
 }
 
 function bindUI() {
-  $('#stabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; S.sheetTab = b.dataset.t; $$('#stabs button').forEach((x) => x.classList.toggle('on', x === b)); renderSheetBody(); setSheet('open'); });
+  $('#stabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; S.sheetTab = b.dataset.t; $$('#stabs button').forEach((x) => x.classList.toggle('on', x === b)); renderSheetBody(); setSheet('open'); if (typeof nbApplyMap === 'function') nbApplyMap(); });
+  if (typeof nbBind === 'function') nbBind($('#shBody'));
   $('#handle').addEventListener('click', () => setSheet($('#sheet').classList.contains('open') ? 'show' : 'open'));
-  $('#shHead').addEventListener('click', (e) => { if (e.target.closest('.x')) return closeSite(); if (!$('#sheet').classList.contains('open')) setSheet('open'); });
+  $('#shHead').addEventListener('click', (e) => { if (e.target.closest('.x')) return closeSite(); const kb = e.target.closest('[data-basis]'); if (kb) return openBasis(kb.dataset.basis); if (!$('#sheet').classList.contains('open')) setSheet('open'); });
   $('#btnSet').addEventListener('click', openSettings);
   $('#ftabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; if (PRICE_MODES[b.dataset.p]) priceTab(b.dataset.p); else openTab(b.dataset.p); });
   regionBind();
@@ -257,7 +258,12 @@ async function selectSite(id) {
   if (!s.cx) clearCxSel();
   id = s.id;
   if (!$('#v-map').classList.contains('on')) showView('map');
-  S.sel = s; S.sheetTab = S.sheetTab || 'info';
+  const oursSel = !s.zone && !s.sale && !s.cx;
+  S.sel = s;
+  if (oursSel && (!S.an || S.an.site !== s)) S.sheetTab = 'near'; // 당사 사업장은 '주변 정비사업'부터
+  else if (!oursSel && S.sheetTab === 'near') S.sheetTab = 'info';
+  else S.sheetTab = S.sheetTab || 'info';
+  if (typeof NB !== 'undefined') { NB.n++; NB.data = null; nbClearHl(); }
   history.replaceState(null, '', s.zone ? location.pathname : '#site=' + encodeURIComponent(id));
   const ours = !s.zone && !s.sale && !s.cx;
   $('#ftabs .ft-site').classList.toggle('on', ours);
@@ -272,9 +278,11 @@ async function selectSite(id) {
   renderSheet(); setSheet('show');
   Kakao.address(p).then((a) => { if (S.an && S.an.site === s) { S.an.addr = a; if (S.sheetTab === 'info') renderSheetBody(); } });
   analyze(s);
+  if (typeof nbCompute === 'function') { if (oursSel) nbCompute(s); else { nbApplyMap(); nbDrawer(); } }
 }
 function closeSite() {
   S.sel = null; S.an = null; clearLayer(); clearZoneSel(); clearSaleSel(); clearCxSel();
+  if (typeof NB !== 'undefined') { NB.n++; NB.data = null; nbApplyMap(); nbDrawer(); }
   if (S.circle) { S.circle.setMap(null); S.circle = null; }
   Object.values(S.siteMarks).forEach((m) => m.el.classList.remove('sel', 'dim'));
   $('#ftabs .ft-site').classList.remove('on'); $('#ftabs .ft-site span').textContent = '🏗️ 당사 사업장';
@@ -376,7 +384,8 @@ async function analyze(s) {
     });
     if (!alive()) return;
     an.cx = cand.filter((r) => r.d != null && r.d <= GEO_MAX);
-    an.missing = cand.filter((r) => r.d == null).length;
+    an.missingList = cand.filter((r) => r.d == null);
+    an.missing = an.missingList.length;
     // 5) 청약·공급
     setProg('청약·공급 단지 확인 중…', 0.88);
     const sidoSet = new Set(codes.map((c) => S.meta?.codes[c]?.sd).filter(Boolean));
@@ -401,36 +410,55 @@ async function analyze(s) {
     renderSheet(); drawLayer(); zonesRefresh();
   } catch (e) {
     console.error(e);
-    if (alive()) { an.status = '주변 자료를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.'; an.err = true; renderSheetBody(); }
+    if (alive()) { an.status = '주변 자료를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.'; an.err = true; renderSheet(); }
   }
 }
 
-// 반경 안 단지 요약
+// 반경 안 단지 요약 (대표값과 근거 화면이 같은 계산을 씀)
+const SALE_FROM = `${THIS_YEAR - 2}-01-01`; // 최근 분양 집계 시작일(공고일 기준)
+const chKindOf = (it) => (/임대/.test(it.kind || '') ? 'rent' : /^국민/.test(it.kind || '') ? 'pub' : 'pri');
+const CH_KINDS = [['pri', '민영분양'], ['pub', '공공분양'], ['rent', '임대'], ['rem', '잔여세대']];
+function saleOf(it) { // 단지 하나의 전용 평당 분양가 (주택형별 최고 분양가 ÷ 전용면적, 세대수 가중)
+  let n = 0, s = 0; for (const t of it.types || []) if (t[0] && t[2]) { const k = t[3] || 1; n += k; s += (t[2] / (t[0] / 3.3058)) * k; }
+  return n ? { v: s / n, n } : null;
+}
 function summary() {
   const an = S.an; if (!an || !an.cx) return null;
   const inR = an.cx.filter((r) => r.d <= settings.radius);
-  const w = (arr) => { let n = 0, s = 0; for (const r of arr) if (r.py12 && r.n12) { n += r.n12; s += r.py12 * r.n12; } return n ? { v: s / n, n } : null; };
-  const all = w(inR), nw = w(inR.filter((r) => r.by && THIS_YEAR - r.by <= 10));
+  const w = (arr) => { let n = 0, s = 0; const used = arr.filter((r) => r.py12 && r.n12); for (const r of used) { n += r.n12; s += r.py12 * r.n12; } return n ? { v: s / n, n, c: used.length, used } : null; };
+  const nwArr = inR.filter((r) => r.by && THIS_YEAR - r.by <= 10);
+  const all = w(inR), nw = w(nwArr);
   const chs = (an.ch || []).filter((it) => it.d <= settings.chRadius);
-  const recent = chs.filter((it) => it.date >= `${THIS_YEAR - 2}-01-01`);
-  let sn = 0, ss = 0; for (const it of recent) for (const t of it.types || []) if (t[0] && t[2]) { sn += t[3] || 1; ss += (t[2] / (t[0] / 3.3058)) * (t[3] || 1); }
-  return { inR, all, nw, sale: sn ? ss / sn : null, chs };
+  const win = chs.filter((it) => it.date >= SALE_FROM);
+  const used = win.filter((it) => chKindOf(it) !== 'rent').map((it) => ({ it, s: saleOf(it) })).filter((x) => x.s);
+  let sn = 0, ss = 0; for (const x of used) { sn += x.s.n; ss += x.s.v * x.s.n; }
+  const sale = sn ? ss / sn : null;
+  return { inR, nwArr, all, nw, sale, saleN: sn, saleUsed: used, saleRent: win.filter((it) => chKindOf(it) === 'rent'), saleNoType: win.filter((it) => chKindOf(it) !== 'rent' && !saleOf(it)), chs };
+}
+function tradeWindow() { // 실거래 12개월 집계 기간
+  const to = S.meta?.tradeTo; if (!to) return '최근 12개월';
+  const d = new Date(+to.slice(0, 4), +to.slice(4, 6) - 12, 1);
+  return `${String(d.getFullYear()).slice(2)}.${String(d.getMonth() + 1).padStart(2, '0')}~${to.slice(2, 4)}.${to.slice(4, 6)}`;
 }
 
 // ---------- 시트 그리기 ----------
 function renderSheet() {
   const s = S.sel; if (!s) return;
-  const sm = summary();
-  const k = (lbl, v, unit) => `<div class="kpi"><small>${lbl}</small><b class="num">${v}${unit ? `<em>${unit}</em>` : ''}</b></div>`;
+  const sm = summary(), an = S.an;
+  const st = !an ? 'none' : an.err ? 'err' : an.cx ? 'ok' : 'load';
+  const k = (key, lbl, o, sub) => {
+    const v = st === 'load' ? '<span class="kst">불러오는 중</span>' : st === 'err' ? '<span class="kst err">조회 실패</span>' : o ? `${fmtN(o)}<em>만</em>` : '<span class="kst">자료 없음</span>';
+    return `<button class="kpi kb" data-basis="${key}" title="눌러서 집계 근거 보기"><small>${lbl}</small><b class="num">${v}</b>${st === 'ok' ? `<span class="ks">${sub}</span>` : ''}</button>`;
+  };
   $('#shHead').innerHTML = `
     <div class="sh-title"><h2>${esc(s.name)}</h2><button class="x" title="닫기">✕</button></div>
     <div class="sh-sub">${s.cx ? `<span class="badge" style="--c:${PRICE_MODES.mm.c}">아파트</span>${s.cx.by ? `${s.cx.by}년 준공 · ` : ''}${esc(s.cx.sgg)} ${esc(s.cx.dong)}` : s.sale ? `<span class="badge" style="--c:${saleColor(s.sale.__t)}">${s.sale.__t === 'apt' ? '아파트' : '오피스텔·도시형'}</span>${esc(s.stage)} · ${fmtN(s.sale.total)}세대` : s.zone ? `<span class="badge" style="--c:${zColor(s.zone)}">${esc(zShort(s.zone))}</span>${esc(s.stage)} · ${fmtN(s.zone.a / 3.3058)}평` : `<span class="badge" style="--c:${typeColor(s.type)}">${esc(s.type)}</span>${fmtN(s.households)}세대 · ${esc(s.stage)}`}</div>
     <div class="kpis">
-      ${k(`${fmtR(settings.radius)} 평균 평당`, sm?.all ? fmtN(sm.all.v) : (S.an?.cx ? '–' : '…'), sm?.all ? '만' : '')}
-      ${k('10년 이내 평당', sm?.nw ? fmtN(sm.nw.v) : (S.an?.cx ? '–' : '…'), sm?.nw ? '만' : '')}
-      ${k(`최근 분양 평당 ${fmtR(settings.chRadius)}`, sm?.sale ? fmtN(sm.sale) : (S.an?.ch ? '–' : '…'), sm?.sale ? '만' : '')}
+      ${k('all', `${fmtR(settings.radius)} 평균 평당(전용)`, sm?.all?.v, sm?.all ? `${tradeWindow()} · ${sm.all.c}개 단지 · 거래 ${fmtN(sm.all.n)}건` : `${tradeWindow()} · 거래 0건`)}
+      ${k('nw', `${fmtR(settings.radius)} 10년 이내 평당`, sm?.nw?.v, sm?.nw ? `${sm.nw.c}개 단지 · 거래 ${fmtN(sm.nw.n)}건` : '해당 거래 0건')}
+      ${k('sale', `최근 분양 평당 ${fmtR(settings.chRadius)}`, sm?.sale, sm?.sale ? `${SALE_FROM.slice(2, 7).replace('-', '.')}~ · ${sm.saleUsed.length}개 단지 · ${fmtN(sm.saleN)}세대 가중` : `${SALE_FROM.slice(2, 7).replace('-', '.')}~ · 0개 단지`)}
     </div>`;
-  $$('#stabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === S.sheetTab));
+  $$('#stabs button').forEach((b) => { b.classList.toggle('on', b.dataset.t === S.sheetTab); if (b.dataset.t === 'near') b.hidden = !!(s.zone || s.sale || s.cx); });
   renderSheetBody();
   const sh = $('#sheet'); if (sh.classList.contains('show') && !sh.classList.contains('open')) setSheet('show');
 }
@@ -439,7 +467,10 @@ function renderSheetBody() {
   const s = S.sel, an = S.an; if (!s || !an) return;
   const body = $('#shBody');
   const loading = an.status ? `<div class="meta stat">${esc(an.status)}</div>${an.err ? '' : `<div class="prog"><i style="width:${Math.round(an.prog * 100)}%"></i></div>`}` : '';
-  if (S.sheetTab === 'info') body.innerHTML = infoHTML(s, an) + loading;
+  const oursS = !s.zone && !s.sale && !s.cx;
+  $('#sheet').classList.toggle('wide', oursS && S.sheetTab === 'near');
+  if (S.sheetTab === 'near' && oursS) body.innerHTML = nbBodyHTML();
+  else if (S.sheetTab === 'info') body.innerHTML = infoHTML(s, an) + loading;
   else if (S.sheetTab === 'price') body.innerHTML = (an.cx ? priceHTML() : loading || '<div class="empty">불러오는 중…</div>');
   else body.innerHTML = (an.ch ? supplyHTML() : loading || '<div class="empty">불러오는 중…</div>');
   bindBody();
@@ -453,14 +484,15 @@ function infoHTML(s, an) {
     <dl class="dl">
       <dt>사업유형</dt><dd>${esc(s.type)}</dd>
       <dt>소재지</dt><dd>${esc(an.addr || `${s.sido} ${s.sgg} ${s.dong} 일대`)}</dd>
-      <dt>계획 세대수</dt><dd>${fmtN(s.households)}세대</dd>
-      <dt>시공사</dt><dd>${esc(s.builder)}</dd>
-      <dt>진행 단계</dt><dd>${esc(s.stage)}</dd>
+      <dt>계획 세대수</dt><dd>${s.households != null ? fmtN(s.households) + '세대' : '<span class="unk">미확인</span>'}</dd>
+      <dt>시공사</dt><dd>${builderHTML(s.builder)}</dd>
       <dt>당사 역할</dt><dd>${esc(s.role || '-')}</dd>
       <dt>구역 면적</dt><dd>${areaOf(s) ? fmtArea(areaOf(s)) + (S.siteArea[s.id] ? ' <span class="meta">(이 기기에서 그림)</span>' : s.areaSrc ? `<div class="meta" style="font-weight:500">${esc(s.areaSrc)}</div>` : '') : '<span class="meta">경계 미입력 · ✏️ 구역 그리기로 입력</span>'}</dd>
     </dl>
+    ${stageSourcesHTML(s)}
     ${typeof inSiteHTML === 'function' ? inSiteHTML(s) : ''}
     ${typeof pcHTML === 'function' ? pcHTML(s) : ''}
+    ${typeof pcTypeHTML === 'function' ? pcTypeHTML(s) : ''}
     <div class="btns">
       <button class="btn" data-act="fix">📌 위치 맞추기</button>
       <button class="btn" data-act="draw">✏️ 구역 ${areaPath(s) ? '다시 ' : ''}그리기</button>
@@ -527,11 +559,12 @@ function chCard(it, withDist = true) {
     <div class="row"><div class="grow">
       <div class="nm">${esc(it.name)}</div>
       <div class="meta"><span class="badge" style="--c:${st[1]}">${st[0]}</span>${esc(it.kind || '')} · ${fmtN(it.total)}세대${withDist && it.d != null ? ' · ' + fmtDist(it.d) : ''}</div>
-    </div><div class="pr num">${sn ? fmtN(ss / sn) + '만' : '–'}<small>전용 평당 분양가</small></div></div>
+    </div><div class="pr num">${sn ? fmtN(ss / sn) + '만' : '–'}<small>평당 분양가 · 전용면적 기준</small></div></div>
     <div class="meta" style="margin-top:5px">접수 ${fmtDate(it.rcept)} · 발표 ${fmtDate(it.winner)} · 입주 ${it.mvn ? fmtYm(it.mvn) : '–'}${comp ? ' · ' + comp : ''}</div>
     <div class="more">
       <div class="meta">${esc(it.addr)} · ${esc(it.builder || '')}</div>
-      <div class="meta" style="margin:4px 0 10px">분양가 ${prices.length ? fmtEok(Math.min(...prices)) + ' ~ ' + fmtEok(Math.max(...prices)) : '–'}${sg ? ` · 공급면적 평당 ${fmtN(sgs / sg)}만` : ''}</div>
+      <div class="meta" style="margin:4px 0 6px">분양가 ${prices.length ? fmtEok(Math.min(...prices)) + ' ~ ' + fmtEok(Math.max(...prices)) : '–'}${sg ? ` · 공급면적 기준 평당 ${fmtN(sgs / sg)}만` : ''}</div>
+      ${typeof chTypesHTML === 'function' ? chTypesHTML(it) : ''}
       <div class="btns">
         <a class="btn p sm" href="${esc(it.url)}" target="_blank" rel="noopener">입주자모집공고</a>
         <button class="star ${isSaved('ch', it.id) ? 'on' : ''}" data-save="ch" data-id="${esc(it.id)}" title="저장">★</button>
@@ -542,18 +575,19 @@ function chCard(it, withDist = true) {
 
 function supplyHTML() {
   const sm = summary();
-  const list = sm.chs;
+  const list = sm.chs.filter(chPass);
   const up = list.filter((it) => it.winner >= TODAY).sort((a, b) => a.rcept.localeCompare(b.rcept));
   const moveIn = list.filter((it) => it.mvn && it.mvn >= NOW_YM && it.winner < TODAY).sort((a, b) => a.mvn.localeCompare(b.mvn));
   const past = list.filter((it) => it.winner < TODAY).sort((a, b) => b.date.localeCompare(a.date));
   const mvSum = moveIn.reduce((a, it) => a + (it.total || 0), 0);
-  const head = `<div class="tools"><div class="seg"><span class="lbl">반경</span>${CH_RADII.map((r) => `<button data-chr="${r}" class="${r === settings.chRadius ? 'on' : ''}">${fmtR(r)}</button>`).join('')}</div></div>`;
+  const head = `<div class="tools"><div class="seg"><span class="lbl">반경</span>${CH_RADII.map((r) => `<button data-chr="${r}" class="${r === settings.chRadius ? 'on' : ''}">${fmtR(r)}</button>`).join('')}</div>${chFilterHTML(sm.chs)}</div>`
+    + (typeof compHTML === 'function' ? compHTML(sm) : '');
   const sec = (t, sub, arr, empty) => `<div class="sec">${t}<small>${sub}</small></div>` + (arr.length ? arr.map((it) => chCard(it)).join('') : `<div class="meta" style="padding:4px 2px 8px">${empty}</div>`);
   return head
     + sec('📢 청약 예정·진행', `${up.length}건`, up, '반경 안에 접수 예정·진행 중인 청약이 없어요.')
-    + sec('🏢 입주 예정 (공급 예정)', `${moveIn.length}개 단지 · ${fmtN(mvSum)}세대`, moveIn, '최근 3년 분양분 중 입주 예정 단지가 없어요.')
+    + sec('🏢 입주 예정 (분양 완료 단지)', `${moveIn.length}개 단지 · ${fmtN(mvSum)}세대`, moveIn, '최근 3년 분양분 중 입주 예정 단지가 없어요.')
     + sec('📊 최근 3년 분양 결과', `${past.length}건`, past, '최근 3년 분양 단지가 없어요.')
-    + '<div class="note">청약홈 입주자모집공고 기준 최근 3년 자료예요. 입주 예정은 분양을 마친 단지의 입주 예정월로 보여 줍니다. 평당 분양가는 전용면적 기준(주변 실거래 평당가와 같은 기준)이에요.</div>';
+    + '<div class="note">청약홈 입주자모집공고 기준 최근 3년 자료예요. <b>입주 예정</b>은 이미 분양을 마친 단지의 입주 예정월이고, <b>향후 분양 예정</b>은 위 경쟁 비교에서 공고 확정분과 정비사업(일정 미확인)으로 나눠 보여 줘요. 평당 분양가는 전용면적 기준(주변 실거래 평당가와 같은 기준)이에요.</div>';
 }
 
 function bindBody() {
@@ -563,7 +597,7 @@ function bindBody() {
     if (t.closest('a')) return;
     const ca = t.closest('[data-cmpadd]'); if (ca) { const c = JSON.parse(ca.dataset.cmpadd); cmpToggle(c); const on = ST.cmp.some((x) => cmpKey(x) === cmpKey(c)); ca.classList.toggle('on', on); ca.textContent = on ? '✓ 비교 담김' : '＋ 비교 담기'; return; }
     const star = t.closest('[data-save]'); if (star) { toggleSave(star.dataset.save, star.dataset.id); star.classList.toggle('on', isSaved(star.dataset.save, star.dataset.id)); return; }
-    const r = t.closest('[data-r]'); if (r) { settings.radius = +r.dataset.r; LS.set('settings', settings); drawCircle(); const p = sitePoint(S.sel); S.map.setLevel(levelFor(settings.radius)); S.map.setCenter(new kakao.maps.LatLng(p.lat - latShift(settings.radius), p.lng)); renderSheet(); drawLayer(); return; }
+    const r = t.closest('[data-r]'); if (r) { settings.radius = +r.dataset.r; LS.set('settings', settings); drawCircle(); const p = sitePoint(S.sel); S.map.setLevel(levelFor(settings.radius)); S.map.setCenter(new kakao.maps.LatLng(p.lat - latShift(settings.radius), p.lng)); renderSheet(); drawLayer(); if (typeof nbRefresh === 'function') nbRefresh(); return; }
     const c = t.closest('[data-chr]'); if (c) { settings.chRadius = +c.dataset.chr; LS.set('settings', settings); renderSheet(); drawLayer(); return; }
     const so = t.closest('[data-sort]'); if (so) { S.sort = so.dataset.sort; renderSheetBody(); return; }
     const ours = t.closest('[data-site]'); if (ours) return selectSite(ours.dataset.site);

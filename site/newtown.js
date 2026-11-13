@@ -46,7 +46,7 @@ function ntPrepare(city) {
   if (city._ready) return true;
   if (NT.pending.has(city.id)) return false;
   NT.pending.add(city.id);
-  (async () => {
+  city._p = (async () => {
     const all = city.zones.flatMap((z) => z.apts);
     for (let i = 0; i < all.length; i += 6) await Promise.all(all.slice(i, i + 6).map((a) => ntLocate(a, city)));
     Geo.flush();
@@ -89,6 +89,18 @@ function convexHull(P) {
   for (const p of P) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
   for (const p of P.slice().reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
   return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+
+// 주변 정비사업 목록용: 원 범위에 걸치는 도시의 구역(위치 찾기를 기다림)
+async function ntZonesNear(bb) {
+  if (!NT.data) return [];
+  const out = [];
+  for (const city of NT.data.cities) {
+    const cb = city.bb || city.hint; if (cb && !bbHit(cb, bb)) continue;
+    if (!ntPrepare(city)) await city._p;
+    for (const z of Object.values(NT.zones)) if (z.nt.city === city) out.push(z);
+  }
+  return out;
 }
 
 // zonesRefresh에서 호출: 보이는 범위의 1기 신도시 구역

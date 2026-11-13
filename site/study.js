@@ -72,7 +72,14 @@ async function signals(d, sc) {
   const sp = d.supply, key = sc.lv === 'nat' ? 'nat' : sc.sd, pv = sp?.series?.permit?.[key];
   if (pv) {
     const L = pv.length, a = sum(pv.slice(L - 12)), b = sum(pv.slice(L - 24, L - 12));
-    out.sp = { v: `${fmtK(a)}<small>호</small>`, sub: delta(pct(a, b), pctTxt(pct(a, b), '')) + `<span class="cap">인허가 12개월${sc.lv === 'sgg' ? ' · ' + esc(sc.sd) : ''}</span>`, spk: spark(pv.slice(-24), 'bar', toolColor('sp')) };
+    const ms = sp.months || [], m1 = ms[ms.length - 12], m2 = ms[ms.length - 1];
+    out.sp = { v: `${fmtK(a)}<small>호</small>`, sub: delta(pct(a, b), pctTxt(pct(a, b), '')) + `<span class="cap">${m1 ? `${m1.slice(2, 4)}.${m1.slice(4)}~${m2.slice(2, 4)}.${m2.slice(4)} 12개월 누계` : '12개월 누계'}${sc.lv === 'sgg' ? ' · 시도 단위' : ''}</span>`, spk: spark(pv.slice(-24), 'bar', toolColor('sp')) };
+  }
+  // 입주예정 (인허가와 별개: 부동산원·R114 발표 시도 단위)
+  const mvd = d.moveIn, mk = sc.lv === 'nat' ? null : sc.sd, mvo = mk ? mvd?.sido?.[mk] : mvd?.national;
+  if (mvo) {
+    const yr = String(THIS_YEAR), vy = mvo.byYear?.[yr];
+    out.mv = { v: `${fmtK(vy ?? mvo.total)}<small>세대</small>`, sub: `<span class="cap">${vy != null ? yr + '년' : (mvd.years || []).join('~') + '년 합계'} · ${esc((mvd.source || '').split('(')[0].trim())}</span>`, spk: '' };
   }
   // 청약
   const sds = sc.lv === 'nat' ? SIDO : [sc.sd];
@@ -99,13 +106,15 @@ async function signals(d, sc) {
 async function renderStudyGrid() {
   const el = $('#drStudy'); if (!el) return;
   const sc = scopeNow(), n = ++ST.sigN;
+  const rg = sc.lv === 'nat' ? '전국' : sc.lv === 'sd' ? sc.sd : sc.sgg.split(' ')[0];
+  const sdName = sc.lv === 'nat' ? '전국' : sc.sd;
   const head = `<button class="sig-h" data-fold="1"><span class="sig-t">지역 세부내용</span><span class="sig-w">${esc(scopeLabel(sc))}</span><i>${ST.fold ? '▴' : '▾'}</i></button>`;
-  const row = (id, s, name) => `<button class="sig-row" data-tool="${id}" style="--c:${toolColor(id)}"><span class="sig-ic">${ico(STUDY_TOOLS.find((x) => x.id === id).icon)}</span><span class="sig-n">${name}</span><span class="sig-v"><b class="num">${s?.v ?? '…'}</b><span class="sig-s">${s?.sub ?? ''}</span></span><span class="sig-r">${s?.spk || '<span class="spk"></span>'}</span></button>`;
+  const row = (id, s, name, area) => `<button class="sig-row" data-tool="${id}" style="--c:${toolColor(id)}"><span class="sig-ic">${ico(STUDY_TOOLS.find((x) => x.id === id).icon)}</span><span class="sig-n"><small>${esc(area)}</small>${name}</span><span class="sig-v"><b class="num">${s?.v ?? '…'}</b><span class="sig-s">${s?.sub ?? ''}</span></span><span class="sig-r">${s?.spk || '<span class="spk"></span>'}</span></button>`;
   const cmpRow = `<div class="sig-row cmp" style="--c:${toolColor('vs')}"><span class="sig-ic">${ico('cmp')}</span><span class="sig-n">단지 비교</span><span class="sig-v"><b class="num">${ST.cmp.length}<small>곳 담김</small></b><span class="sig-s"><span class="cap">＋ 버튼으로 담기</span></span></span><span class="sig-r sig-btns"><button class="btn sm" data-tool="vs">1:1</button><button class="btn sm" data-tool="mc">여럿</button></span></div>`;
   const draw = (S_) => {
     if (n !== ST.sigN) return;
     el.classList.toggle('fold', ST.fold);
-    el.innerHTML = head + `<div class="sig-list">${row('rt', S_.rt, '실거래가')}${row('us', S_.us, '미분양')}${row('sp', S_.sp, '공급량')}${row('cy', S_.cy, '청약')}${row('dv', S_.dv, '개발호재')}${cmpRow}</div>`;
+    el.innerHTML = head + `<div class="sig-list">${row('rt', S_.rt, '실거래가', S_.rt?.area || rg)}${row('us', S_.us, '미분양', rg)}${row('sp', S_.sp, '인허가', sdName)}${S_.mv ? row('sp', S_.mv, '입주예정', sdName) : ''}${row('cy', S_.cy, '청약', rg)}${row('dv', S_.dv, '개발호재', rg)}${cmpRow}</div>`;
   };
   draw({});
   el.onclick = (e) => {

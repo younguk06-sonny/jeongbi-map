@@ -11,7 +11,7 @@ async function ggInit() {
 }
 function ggApply(z) { // loadZoneFile에서 각 구역에 적용
   const o = GG.data?.over[z.id]; if (!o) return z;
-  z.gg = o; z.s = o.st; if (!z.n) z.n = o.n;
+  z.gg = o; z.s0 = z.s; z.s = o.st; if (!z.n) z.n = o.n;
   return z;
 }
 
@@ -39,6 +39,15 @@ function ggZoneOf(p, i) {
     id, n: p.n, t: pre ? '예정' : (p.ty || '정비구역'), k: p.ty === '재건축' ? 'rc' : 'rd', s: p.st, d: '', a, c: g,
     bb: [g.lat - kLat, g.lng - kLng, g.lat + kLat, g.lng + kLng], rings: ring, code: p.codes[0], gg: p, approx: true,
   });
+}
+
+// 주변 정비사업 목록용: 해당 시군 파일 코드의 경계 없는 구역 위치를 모두 찾은 뒤 구역 목록 반환
+async function ggZonesReady(codes) {
+  if (!GG.data) return [];
+  const set = new Set(codes);
+  const todo = GG.data.pts.filter((p) => p.codes.some((c) => set.has(c)) && Geo.get(ggKey(p)) === undefined);
+  if (todo.length) { await pool(todo, 4, ggLocate); Geo.flush(); }
+  return GG.data.pts.map((p, i) => (p.codes.some((c) => set.has(c)) ? ggZoneOf(p, i) : null)).filter(Boolean);
 }
 
 // zonesRefresh에서 호출: 보이는 시군 파일 코드에 속한 경기도 자료 구역

@@ -56,6 +56,7 @@ async function zonesInit() {
   try { Z.meta = await getJSON('data/zones/index.json'); } catch (e) { console.warn('정비구역 자료 없음', e); return; }
   if (typeof ntInit === 'function') await ntInit();
   if (typeof ggInit === 'function') await ggInit();
+  Z.inited = true;
   kakao.maps.event.addListener(S.map, 'idle', zonesRefresh);
   renderZoneFilter();
   zonesRefresh();
@@ -64,7 +65,7 @@ async function zonesInit() {
 
 async function loadZoneFile(code) {
   if (!Z.files[code]) {
-    Z.files[code] = getJSON(`data/zones/${code}.json`).then((rows) => rows.map((r) => ({
+    Z.files[code] = (async () => { for (let i = 0; i < 100 && !Z.inited; i++) await new Promise((r) => setTimeout(r, 100)); })().then(() => getJSON(`data/zones/${code}.json`)).then((rows) => rows.map((r) => ({
       id: r[0], n: r[1], t: r[2], k: r[3], s: r[4], d: r[5], a: r[6], c: { lat: r[7][0] / 1e5, lng: r[7][1] / 1e5 }, p: r[8], bb: r[9], code,
     })).map((z) => (typeof ggApply === 'function' ? ggApply(z) : z))).catch(() => []);
   }
@@ -89,10 +90,11 @@ function zStyle(z, sel) {
 function ensurePoly(z) {
   if (Z.polys[z.id]) return Z.polys[z.id];
   const paths = z.rings ? [z.rings] : z.p.map((pg) => pg.map(decodeRing));
-  const parts = paths.map((path) => new kakao.maps.Polygon(Object.assign({ path, zIndex: z.t === 'BZ401' ? 0 : 1 }, zStyle(z, false))));
+  const parts = paths.map((path) => new kakao.maps.Polygon(Object.assign({ path, zIndex: z.t === 'BZ401' ? 0 : 1 }, zStyle(z, typeof NB !== 'undefined' && !!NB.hlIds?.has(z.id)))));
   parts.forEach((pg) => kakao.maps.event.addListener(pg, 'click', (e) => {
     if (S.draw) return addVertex(e.latLng);
     if (S.fix) return moveSite(e.latLng);
+    if (typeof nbMapClick === 'function' && nbMapClick(z)) return;
     selectZone(z);
   }));
   Z.polys[z.id] = parts;
@@ -100,6 +102,7 @@ function ensurePoly(z) {
 }
 
 function zoneVisible(z, view, lvl) {
+  if (typeof NB !== 'undefined' && NB.active && !NB.ids.has(z.id)) return false; // 주변 정비사업 탭: 목록에 있는 구역만
   if (!Z.on[z.k]) return false;
   if (!Z.stOn[zBucket(z)]) return false;
   if (lvl >= ZONE_MIN_LEVEL && z.a < 20000 && z.id !== Z.selId) return false;
@@ -107,7 +110,7 @@ function zoneVisible(z, view, lvl) {
 }
 
 async function zonesRefresh() {
-  if (!Z.meta || !S.map) return;
+  if (!Z.meta || !Z.inited || !S.map) return;
   if (Z.busy) { Z.again = true; return; }
   Z.busy = true;
   try {
@@ -162,7 +165,7 @@ function drawZoneLabels(vis, lvl) {
     const el = document.createElement('div');
     el.className = 'zl' + (zs.some((z) => z.id === Z.selId) ? ' sel' : '');
     el.innerHTML = zs.slice(0, mini ? 2 : 3).map((z) => `<div class="zr${zDone(z) ? ' done' : ''}${mini ? ' mini' : ''}" data-id="${esc(z.id)}" style="--c:${zColor(z)}"><b>${esc(zTitle(z))}</b>${mini ? '' : `<span>${esc(zStage(z))}</span>`}</div>`).join('');
-    el.onclick = (e) => { e.stopPropagation(); const r = e.target.closest('.zr'); const z = zs.find((x) => x.id === r?.dataset.id) || zs[0]; selectZone(z); };
+    el.onclick = (e) => { e.stopPropagation(); const r = e.target.closest('.zr'); const z = zs.find((x) => x.id === r?.dataset.id) || zs[0]; if (typeof nbMapClick === 'function' && nbMapClick(z)) return; selectZone(z); };
     const ov = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(zs[0].c.lat, zs[0].c.lng), content: el, yAnchor: .5, zIndex: 6 });
     ov.setMap(S.map); Z.labels[sig] = ov;
   }
@@ -172,6 +175,7 @@ function drawZoneLabels(vis, lvl) {
 
 function restyleZone(id, sel) {
   const z = findZone(id); if (!z) return;
+  if (!sel && typeof NB !== 'undefined' && NB.hlIds?.has(id)) sel = true;
   Z.polys[id]?.forEach((pg) => pg.setOptions(zStyle(z, sel)));
 }
 function findZone(id) {
@@ -241,6 +245,7 @@ function renderZoneFilter() {
     else if (b.dataset.st) { Z.stOn[b.dataset.st] = Z.stOn[b.dataset.st] ? 0 : 1; LS.set('zoneStages', Z.stOn); }
     else if (b.dataset.z === 'vis') { Z.visible = !Z.visible; LS.set('zoneOn', Z.visible); }
     renderZoneFilter(); zonesRefresh();
+    if (typeof nbRefresh === 'function') nbRefresh();
   };
   zoneTabLabel(); zoneStageCounts();
 }
