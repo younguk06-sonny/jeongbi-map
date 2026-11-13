@@ -112,14 +112,17 @@ async function zonesRefresh() {
   try {
     const lvl = S.map.getLevel();
     const on = Z.visible && lvl <= ZONE_MIN_LEVEL;
-    $('#zhint').classList.toggle('on', Z.visible && lvl > ZONE_MIN_LEVEL && lvl <= 10);
+    const noSt = !Z_STAGES.some(([k]) => Z.stOn[k]), noCat = !Z.meta.cats.some(([k]) => Z.on[k]);
+    const hint = $('#zhint');
+    hint.textContent = noSt ? '진행 단계가 모두 꺼져 있어요 — 정비구역 탭에서 「전체」를 눌러 주세요' : noCat ? '사업유형이 모두 꺼져 있어요 — 정비구역 탭에서 유형을 켜 주세요' : '지도를 확대하면 정비구역이 보여요';
+    hint.classList.toggle('on', Z.visible && (noSt || noCat || (lvl > ZONE_MIN_LEVEL && lvl <= 10)));
     const b = S.map.getBounds(), sw = b.getSouthWest(), ne = b.getNorthEast();
     const dLa = (ne.getLat() - sw.getLat()) * .25, dLo = (ne.getLng() - sw.getLng()) * .25;
     const view = [sw.getLat() - dLa, sw.getLng() - dLo, ne.getLat() + dLa, ne.getLng() + dLo];
     const codes = on ? Object.keys(Z.meta.sgg).filter((k) => bbHit(Z.meta.sgg[k].bb, view)) : [];
     const lists = await Promise.all(codes.map(loadZoneFile));
     const keep = new Set(), vis = [];
-    if (on && typeof ntZonesIn === 'function') lists.push(ntZonesIn(view));
+    if (on && typeof ntZonesIn === 'function') { try { lists.push(ntZonesIn(view)); } catch (e) { console.warn('1기 신도시 구역 오류', e); } }
     const cnt = {};
     for (const list of lists) for (const z of list) {
       if (Z.on[z.k] && bbHit(z.bb, view)) cnt[zBucket(z)] = (cnt[zBucket(z)] || 0) + 1;
@@ -241,7 +244,7 @@ function zoneStageCounts() {
   document.querySelectorAll('#zfilter [data-stn]').forEach((e) => { const n = Z.stCnt[e.dataset.stn] || 0; e.textContent = n ? n.toLocaleString() : ''; });
 }
 function zoneTabLabel() {
-  const n = Object.values(Z.on).filter(Boolean).length;
-  const el = $('#zoneCnt'); if (el) el.textContent = Z.visible ? `${n}/${Z.meta.cats.length}` : 'OFF';
+  const n = Z.meta.cats.filter(([k]) => Z.on[k]).length, ns = Z_STAGES.filter(([k]) => Z.stOn[k]).length;
+  const el = $('#zoneCnt'); if (el) el.textContent = !Z.visible ? 'OFF' : (n === 0 || ns === 0) ? '0' : `${n}/${Z.meta.cats.length}`;
   $('#ftabs [data-p="zones"]')?.classList.toggle('on', Z.visible);
 }
