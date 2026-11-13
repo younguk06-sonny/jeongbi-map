@@ -41,7 +41,8 @@ function zoneCountBySido() {
 }
 
 function regionBind() {
-  if (innerWidth >= 900) setTimeout(() => openDrawer(true), 0);
+  if (innerWidth >= 900 && LS.get('drawerOpen', true)) setTimeout(() => openDrawer(true), 0);
+  $('#drToggle').addEventListener('click', () => openDrawer(!$('#drawer').classList.contains('on')));
   $('#btnRegion').addEventListener('click', () => openDrawer(true));
   $('#drClose').addEventListener('click', () => openDrawer(false));
   $('#scrim').addEventListener('click', () => openDrawer(false));
@@ -55,6 +56,9 @@ function regionBind() {
 function openDrawer(on) {
   $('#drawer').classList.toggle('on', on);
   document.body.classList.toggle('dr-open', on && innerWidth >= 900);
+  document.body.classList.toggle('dr-on', on);
+  $('#drToggle').title = on ? '왼쪽 창 닫기' : '왼쪽 창 열기';
+  if (innerWidth >= 900) LS.set('drawerOpen', on); // PC에선 열고 닫은 상태를 기억
   setTimeout(() => S.map && S.map.relayout(), 260);
   $('#scrim').classList.toggle('on', on && innerWidth < 900);
   if (on) {

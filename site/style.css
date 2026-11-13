@@ -463,3 +463,13 @@ a{color:var(--accent)}
 /* 바닥 메뉴줄(지도·사업장·청약·저장) 없앰 → 지도를 화면 끝까지 */
 :root{--tabh:0px}
 .tabs{display:none}
+
+/* ---------- 왼쪽 창 열고 닫기 손잡이 ---------- */
+.dr-toggle{position:fixed;left:0;top:50%;z-index:56;width:24px;height:64px;margin-top:-32px;border:1px solid var(--line);border-left:0;border-radius:0 12px 12px 0;
+  background:var(--card);box-shadow:3px 0 10px rgba(0,0,0,.12);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;transition:left .25s,background .15s}
+.dr-toggle svg{width:16px;height:16px;fill:none;stroke:var(--accent);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transition:transform .25s}
+.dr-toggle:hover{background:var(--soft)}
+body.dr-on .dr-toggle{left:min(360px,88vw)}
+body.dr-on .dr-toggle svg{transform:rotate(180deg)}
+body.dr-on:has(.drawer.tool) .dr-toggle{left:min(460px,calc(100vw - 28px))}
+.drawer.tool{width:min(460px,calc(100vw - 28px))}
