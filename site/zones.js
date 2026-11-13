@@ -36,6 +36,7 @@ const bbHit = (a, b) => !(a[2] < b[0] || a[0] > b[2] || a[3] < b[1] || a[1] > b[
 
 async function zonesInit() {
   try { Z.meta = await getJSON('data/zones/index.json'); } catch (e) { console.warn('정비구역 자료 없음', e); return; }
+  if (typeof ntInit === 'function') await ntInit();
   kakao.maps.event.addListener(S.map, 'idle', zonesRefresh);
   renderZoneFilter();
   zonesRefresh();
@@ -68,7 +69,8 @@ function zStyle(z, sel) {
 
 function ensurePoly(z) {
   if (Z.polys[z.id]) return Z.polys[z.id];
-  const parts = z.p.map((pg) => new kakao.maps.Polygon(Object.assign({ path: pg.map(decodeRing), zIndex: z.t === 'BZ401' ? 0 : 1 }, zStyle(z, false))));
+  const paths = z.rings ? [z.rings] : z.p.map((pg) => pg.map(decodeRing));
+  const parts = paths.map((path) => new kakao.maps.Polygon(Object.assign({ path, zIndex: z.t === 'BZ401' ? 0 : 1 }, zStyle(z, false))));
   parts.forEach((pg) => kakao.maps.event.addListener(pg, 'click', (e) => {
     if (S.draw) return addVertex(e.latLng);
     if (S.fix) return moveSite(e.latLng);
@@ -99,6 +101,7 @@ async function zonesRefresh() {
     const codes = on ? Object.keys(Z.meta.sgg).filter((k) => bbHit(Z.meta.sgg[k].bb, view)) : [];
     const lists = await Promise.all(codes.map(loadZoneFile));
     const keep = new Set(), vis = [];
+    if (on && typeof ntZonesIn === 'function') lists.push(ntZonesIn(view));
     for (const list of lists) for (const z of list) if (zoneVisible(z, view, lvl)) { keep.add(z.id); vis.push(z); }
     for (const id of Z.shown) if (!keep.has(id)) Z.polys[id]?.forEach((pg) => pg.setMap(null));
     for (const z of vis) if (!Z.shown.has(z.id)) ensurePoly(z).forEach((pg) => pg.setMap(S.map));
@@ -145,7 +148,7 @@ function restyleZone(id, sel) {
 }
 function findZone(id) {
   for (const v of Object.values(Z.files)) if (Array.isArray(v)) { const z = v.find((x) => x.id === id); if (z) return z; }
-  return Z._cache?.[id] || null;
+  return Z._cache?.[id] || (typeof NT !== 'undefined' && NT.zones[id]) || null;
 }
 
 // ---------- 구역 선택 → 사업장과 같은 시트(개요·주변 시세·청약) ----------
@@ -153,7 +156,7 @@ function selectZone(z) {
   (Z._cache ||= {})[z.id] = z;
   if (Z.selId && Z.selId !== z.id) restyleZone(Z.selId, false);
   Z.selId = z.id; restyleZone(z.id, true);
-  const sgg = Z.meta.sgg[z.code] || {};
+  const sgg = z.nt ? { sd: z.nt.city.sido || '경기', n: z.nt.city.name } : (Z.meta.sgg[z.code] || {});
   const site = {
     id: 'z:' + z.id, zone: z, name: zTitle(z), type: zTypeName(z), stage: zStage(z), lat: z.c.lat, lng: z.c.lng,
     sido: sgg.sd || '', sgg: sgg.n || '', dong: '', households: null, area: null,
@@ -176,6 +179,7 @@ function ourSiteFor(z) { // 이 구역과 겹치는 당사 사업장
 
 function zoneInfoHTML(s, an) {
   const z = s.zone, ours = ourSiteFor(z);
+  if (z.nt) return (ours ? `<div class="note ours" data-site="${esc(ours.id)}" style="cursor:pointer">🏗️ 당사 사업장 <b>${esc(ours.name)}</b> 구역이에요 — 눌러서 사업장 정보 보기</div>` : '') + ntInfoHTML(z);
   return `
     ${ours ? `<div class="note ours" data-site="${esc(ours.id)}" style="cursor:pointer">🏗️ 당사 사업장 <b>${esc(ours.name)}</b> 구역이에요 — 눌러서 사업장 정보 보기</div>` : ''}
     ${stageBar(z)}
