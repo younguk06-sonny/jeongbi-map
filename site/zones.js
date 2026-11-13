@@ -20,7 +20,7 @@ const SHORT = {
 
 const zCat = (k) => Z.meta.cats.find((c) => c[0] === k) || Z.meta.cats[1];
 const zColor = (z) => zCat(z.k)[2];
-const zDone = (z) => Z.meta.done.includes(z.s);
+const zDone = (z) => Z.meta.done.includes(z.s) || /^준공/.test(z.s || '');
 const zStage = (z) => Z.meta.stages[z.s] || z.s || '정비구역 지정';
 const zTypeName = (z) => Z.meta.types[z.t] || z.t;
 const zShort = (z) => SHORT[z.t] || (z.t === '정비구역' ? '정비구역' : z.t);
@@ -55,6 +55,7 @@ const bbHit = (a, b) => !(a[2] < b[0] || a[0] > b[2] || a[3] < b[1] || a[1] > b[
 async function zonesInit() {
   try { Z.meta = await getJSON('data/zones/index.json'); } catch (e) { console.warn('정비구역 자료 없음', e); return; }
   if (typeof ntInit === 'function') await ntInit();
+  if (typeof ggInit === 'function') await ggInit();
   kakao.maps.event.addListener(S.map, 'idle', zonesRefresh);
   renderZoneFilter();
   zonesRefresh();
@@ -65,7 +66,7 @@ async function loadZoneFile(code) {
   if (!Z.files[code]) {
     Z.files[code] = getJSON(`data/zones/${code}.json`).then((rows) => rows.map((r) => ({
       id: r[0], n: r[1], t: r[2], k: r[3], s: r[4], d: r[5], a: r[6], c: { lat: r[7][0] / 1e5, lng: r[7][1] / 1e5 }, p: r[8], bb: r[9], code,
-    }))).catch(() => []);
+    })).map((z) => (typeof ggApply === 'function' ? ggApply(z) : z))).catch(() => []);
   }
   return Z.files[code];
 }
@@ -80,7 +81,7 @@ function zStyle(z, sel) {
   const c = zColor(z), done = zDone(z), outline = z.t === 'BZ401' || z.t === 'BZ201';
   return {
     strokeWeight: sel ? 3 : outline ? 2 : 1.5, strokeColor: done ? '#9aa4ae' : c, strokeOpacity: sel ? 1 : .9,
-    strokeStyle: outline ? 'shortdash' : 'solid',
+    strokeStyle: outline || z.approx ? 'shortdash' : 'solid',
     fillColor: done ? '#9aa4ae' : c, fillOpacity: outline ? 0 : sel ? .32 : done ? .1 : .17,
   };
 }
@@ -122,6 +123,7 @@ async function zonesRefresh() {
     const codes = on ? Object.keys(Z.meta.sgg).filter((k) => bbHit(Z.meta.sgg[k].bb, view)) : [];
     const lists = await Promise.all(codes.map(loadZoneFile));
     const keep = new Set(), vis = [];
+    if (on && typeof ggZonesIn === 'function') { try { lists.push(ggZonesIn(codes)); } catch (e) { console.warn('경기도 추진현황 오류', e); } }
     if (on && typeof ntZonesIn === 'function') { try { lists.push(ntZonesIn(view)); } catch (e) { console.warn('1기 신도시 구역 오류', e); } }
     const cnt = {};
     for (const list of lists) for (const z of list) {
@@ -174,7 +176,7 @@ function restyleZone(id, sel) {
 }
 function findZone(id) {
   for (const v of Object.values(Z.files)) if (Array.isArray(v)) { const z = v.find((x) => x.id === id); if (z) return z; }
-  return Z._cache?.[id] || (typeof NT !== 'undefined' && NT.zones[id]) || null;
+  return Z._cache?.[id] || (typeof NT !== 'undefined' && NT.zones[id]) || (typeof GG !== 'undefined' && GG.zones[id]) || null;
 }
 
 // ---------- 구역 선택 → 사업장과 같은 시트(개요·주변 시세·청약) ----------
@@ -182,7 +184,7 @@ function selectZone(z) {
   (Z._cache ||= {})[z.id] = z;
   if (Z.selId && Z.selId !== z.id) restyleZone(Z.selId, false);
   Z.selId = z.id; restyleZone(z.id, true);
-  const sgg = z.nt ? { sd: z.nt.city.sido || '경기', n: z.nt.city.name } : (Z.meta.sgg[z.code] || {});
+  const sgg = z.nt ? { sd: z.nt.city.sido || '경기', n: z.nt.city.name } : z.approx ? { sd: '경기', n: z.gg.city } : (Z.meta.sgg[z.code] || {});
   const site = {
     id: 'z:' + z.id, zone: z, name: zTitle(z), type: zTypeName(z), stage: zStage(z), lat: z.c.lat, lng: z.c.lng,
     sido: sgg.sd || '', sgg: sgg.n || '', dong: '', households: null, area: null,
@@ -205,6 +207,7 @@ function ourSiteFor(z) { // 이 구역과 겹치는 당사 사업장
 
 function zoneInfoHTML(s, an) {
   const z = s.zone, ours = ourSiteFor(z);
+  if (z.approx) return (ours ? `<div class="note ours" data-site="${esc(ours.id)}" style="cursor:pointer">🏗️ 당사 사업장 <b>${esc(ours.name)}</b> 구역이에요 — 눌러서 사업장 정보 보기</div>` : '') + `<dl class="dl"><dt>사업유형</dt><dd>${esc(z.gg.ty || '-')}</dd><dt>진행 단계</dt><dd>${esc(zStage(z))}</dd><dt>구역 면적</dt><dd>${z.gg.a ? fmtArea(z.gg.a) : '-'}</dd></dl>` + ggInfoHTML(z) + `<div class="note">출처: ${esc(Z.meta.src.G)}</div>`;
   if (z.nt) return (ours ? `<div class="note ours" data-site="${esc(ours.id)}" style="cursor:pointer">🏗️ 당사 사업장 <b>${esc(ours.name)}</b> 구역이에요 — 눌러서 사업장 정보 보기</div>` : '') + ntInfoHTML(z);
   return `
     ${ours ? `<div class="note ours" data-site="${esc(ours.id)}" style="cursor:pointer">🏗️ 당사 사업장 <b>${esc(ours.name)}</b> 구역이에요 — 눌러서 사업장 정보 보기</div>` : ''}
@@ -216,7 +219,8 @@ function zoneInfoHTML(s, an) {
       <dt>구역 면적</dt><dd>${fmtArea(z.a)}</dd>
       <dt>${z.id[0] === 'S' ? '자료 작성일' : '고시'}</dt><dd>${esc(zDate(z) || '-')}</dd>
     </dl>
-    <div class="note">출처: ${esc(Z.meta.src[z.id[0]])}. ${z.id[0] === 'S' ? '서울시가 공개한 사업별 추진단계 기준이라 최근 변경이 늦게 반영될 수 있어요.' : '정비구역 경계·고시 자료라 추진위·조합 등 세부 단계는 담겨 있지 않아요.'}</div>`;
+    ${z.gg && typeof ggInfoHTML === 'function' ? ggInfoHTML(z) : ''}
+    <div class="note">출처: ${esc(Z.meta.src[z.id[0]])}. ${z.id[0] === 'S' ? '서울시가 공개한 사업별 추진단계 기준이라 최근 변경이 늦게 반영될 수 있어요.' : z.gg ? `진행단계는 ${esc(Z.meta.src.G)} 자료로 덧입혔어요.` : '정비구역 경계·고시 자료라 추진위·조합 등 세부 단계는 담겨 있지 않아요.'}</div>`;
 }
 
 // ---------- 필터 ----------

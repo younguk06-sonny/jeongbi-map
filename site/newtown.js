@@ -90,11 +90,6 @@ function convexHull(P) {
   for (const p of P.slice().reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
   return lo.slice(0, -1).concat(up.slice(0, -1));
 }
-function polyArea(h) { // ㎡ (작은 영역 근사)
-  const lat0 = h[0][0] * Math.PI / 180, kx = 111320 * Math.cos(lat0), ky = 110540;
-  let s = 0; for (let i = 0; i < h.length; i++) { const a = h[i], b = h[(i + 1) % h.length]; s += a[1] * kx * b[0] * ky - b[1] * kx * a[0] * ky; }
-  return Math.abs(s / 2);
-}
 
 // zonesRefresh에서 호출: 보이는 범위의 1기 신도시 구역
 function ntZonesIn(view) {

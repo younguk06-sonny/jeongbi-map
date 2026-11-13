@@ -130,7 +130,7 @@ async function init() {
   kakao.maps.event.addListener(S.map, 'click', (e) => { if (S.draw) addVertex(e.latLng); else if (S.fix) moveSite(e.latLng); else openTab(null); });
   kakao.maps.event.addListener(S.map, 'idle', updateWhere);
   kakao.maps.event.addListener(S.map, 'zoom_changed', () => drawLayer());
-  drawSites();
+  drawSites(); if (typeof inInitAfterSites === "function") inInitAfterSites();
   drawAreas();
   refineSites();
   zonesInit();
@@ -176,10 +176,11 @@ function renderChips() { // 상단 '당사 사업장' 탭의 펼침 목록
   $('#siteCnt').textContent = S.sites.length;
   const groups = {};
   for (const s of S.sites) (groups[s.sido] ||= []).push(s);
-  $('#sitePanel').innerHTML = `<div class="sp-head"><b>당사 정비사업장 ${S.sites.length}곳</b><button class="btn sm p" data-all="1">🧭 전체 지도에 보기</button></div>
+  $('#sitePanel').innerHTML = `<div class="sp-head"><b>당사 정비사업장 ${S.sites.length}곳</b><button class="btn sm p" data-all="1">🧭 전체 지도에 보기</button></div>${typeof inPanelHTML === 'function' ? inPanelHTML() : ''}
     ${Object.entries(groups).map(([sd, arr]) => `<div class="sp-grp"><div class="sp-sd">${esc(sd)} <small>${arr.length}</small></div>
       ${arr.map((s) => `<button class="sp-item${S.sel && S.sel.id === s.id ? ' on' : ''}" data-id="${esc(s.id)}"><i style="background:${typeColor(s.type)}"></i><span class="grow"><b>${esc(s.name)}</b><small>${esc(s.sgg)} · ${esc(typeShort(s.type))} · ${fmtN(s.households)}세대</small></span><em>${esc(s.stage)}</em></button>`).join('')}</div>`).join('')}`;
   $('#sitePanel').onclick = (e) => {
+    if (typeof inPanelClick === 'function' && inPanelClick(e)) return;
     if (e.target.closest('[data-all]')) { openTab(null); closeSite(); fitAll(); return; }
     const b = e.target.closest('.sp-item'); if (b) { openTab(null); selectSite(b.dataset.id); }
   };
@@ -458,6 +459,8 @@ function infoHTML(s, an) {
       <dt>당사 역할</dt><dd>${esc(s.role || '-')}</dd>
       <dt>구역 면적</dt><dd>${areaOf(s) ? fmtArea(areaOf(s)) + (S.siteArea[s.id] ? ' <span class="meta">(이 기기에서 그림)</span>' : s.areaSrc ? `<div class="meta" style="font-weight:500">${esc(s.areaSrc)}</div>` : '') : '<span class="meta">경계 미입력 · ✏️ 구역 그리기로 입력</span>'}</dd>
     </dl>
+    ${typeof inSiteHTML === 'function' ? inSiteHTML(s) : ''}
+    ${typeof pcHTML === 'function' ? pcHTML(s) : ''}
     <div class="btns">
       <button class="btn" data-act="fix">📌 위치 맞추기</button>
       <button class="btn" data-act="draw">✏️ 구역 ${areaPath(s) ? '다시 ' : ''}그리기</button>
