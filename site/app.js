@@ -131,6 +131,7 @@ async function init() {
   drawSites();
   drawAreas();
   refineSites();
+  zonesInit();
   const id = decodeURIComponent((location.hash.match(/site=([^&]+)/) || [])[1] || '');
   if (id && S.sites.find((s) => s.id === id)) selectSite(id); else fitAll();
   addEventListener('hashchange', () => { const m = location.hash.match(/site=([^&]+)/); if (m && decodeURIComponent(m[1]) !== S.sel?.id) selectSite(decodeURIComponent(m[1])); });
@@ -143,6 +144,7 @@ function bindUI() {
   $('#shHead').addEventListener('click', (e) => { if (e.target.closest('.x')) return closeSite(); if (!$('#sheet').classList.contains('open')) setSheet('open'); });
   $('#btnAll').addEventListener('click', () => { closeSite(); fitAll(); });
   $('#btnSet').addEventListener('click', openSettings);
+  $('#btnZone').addEventListener('click', () => toggleZonePanel());
   $('#btnMe').addEventListener('click', locateMe);
   $('#btnCad').addEventListener('click', () => setCadastral(!S.cadastral));
   $('#drawBar').addEventListener('click', (e) => { const b = e.target.closest('[data-d]'); if (b) drawAct(b.dataset.d); });
@@ -225,17 +227,19 @@ function fitAll() {
 }
 
 async function selectSite(id) {
-  const s = S.sites.find((x) => x.id === id); if (!s) return;
+  const s = typeof id === 'object' ? id : S.sites.find((x) => x.id === id); if (!s) return;
+  if (!s.zone) clearZoneSel();
+  id = s.id;
   if (!$('#v-map').classList.contains('on')) showView('map');
   S.sel = s; S.sheetTab = S.sheetTab || 'info';
-  history.replaceState(null, '', '#site=' + encodeURIComponent(id));
+  history.replaceState(null, '', s.zone ? location.pathname : '#site=' + encodeURIComponent(id));
   $$('#siteChips .chip').forEach((b) => b.classList.toggle('on', b.dataset.id === id));
   $(`#siteChips .chip[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
-  Object.entries(S.siteMarks).forEach(([k, m]) => { m.el.classList.toggle('sel', k === id); m.el.classList.toggle('dim', k !== id); });
+  Object.entries(S.siteMarks).forEach(([k, m]) => { m.el.classList.toggle('sel', k === id); m.el.classList.toggle('dim', !s.zone && k !== id); });
   if (!S.map) return;
   const p = sitePoint(s);
-  S.map.setLevel(levelFor(settings.radius));
-  S.map.setCenter(new kakao.maps.LatLng(p.lat - latShift(settings.radius), p.lng));
+  if (s.zone && S.map.getLevel() <= levelFor(settings.radius)) S.map.panTo(new kakao.maps.LatLng(p.lat - latShift(settings.radius) * S.map.getLevel() / levelFor(settings.radius), p.lng));
+  else { S.map.setLevel(levelFor(settings.radius)); S.map.setCenter(new kakao.maps.LatLng(p.lat - latShift(settings.radius), p.lng)); }
   drawCircle(); if (S.map) drawAreas();
   S.an = { site: s, status: '주변 자료 찾는 중…', prog: 0, cx: null, ch: null, addr: '' };
   renderSheet(); setSheet('show');
@@ -243,7 +247,7 @@ async function selectSite(id) {
   analyze(s);
 }
 function closeSite() {
-  S.sel = null; S.an = null; clearLayer();
+  S.sel = null; S.an = null; clearLayer(); clearZoneSel();
   if (S.circle) { S.circle.setMap(null); S.circle = null; }
   Object.values(S.siteMarks).forEach((m) => m.el.classList.remove('sel', 'dim'));
   $$('#siteChips .chip').forEach((b) => b.classList.remove('on'));
@@ -367,7 +371,7 @@ async function analyze(s) {
     an.ch = chCand.filter((it) => it.d != null && it.d <= 10000);
     Geo.flush();
     an.status = ''; an.prog = 1;
-    renderSheet(); drawLayer();
+    renderSheet(); drawLayer(); zonesRefresh();
   } catch (e) {
     console.error(e);
     if (alive()) { an.status = '주변 자료를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.'; an.err = true; renderSheetBody(); }
@@ -393,7 +397,7 @@ function renderSheet() {
   const k = (lbl, v, unit) => `<div class="kpi"><small>${lbl}</small><b class="num">${v}${unit ? `<em>${unit}</em>` : ''}</b></div>`;
   $('#shHead').innerHTML = `
     <div class="sh-title"><h2>${esc(s.name)}</h2><button class="x" title="닫기">✕</button></div>
-    <div class="sh-sub"><span class="badge" style="--c:${typeColor(s.type)}">${esc(s.type)}</span>${fmtN(s.households)}세대 · ${esc(s.stage)}</div>
+    <div class="sh-sub">${s.zone ? `<span class="badge" style="--c:${zColor(s.zone)}">${esc(zShort(s.zone))}</span>${esc(s.stage)} · ${fmtN(s.zone.a / 3.3058)}평` : `<span class="badge" style="--c:${typeColor(s.type)}">${esc(s.type)}</span>${fmtN(s.households)}세대 · ${esc(s.stage)}`}</div>
     <div class="kpis">
       ${k(`${fmtR(settings.radius)} 평균 평당`, sm?.all ? fmtN(sm.all.v) : (S.an?.cx ? '–' : '…'), sm?.all ? '만' : '')}
       ${k('10년 이내 평당', sm?.nw ? fmtN(sm.nw.v) : (S.an?.cx ? '–' : '…'), sm?.nw ? '만' : '')}
@@ -415,6 +419,7 @@ function renderSheetBody() {
 }
 
 function infoHTML(s, an) {
+  if (s.zone) return zoneInfoHTML(s, an);
   return `
     <dl class="dl">
       <dt>사업유형</dt><dd>${esc(s.type)}</dd>
@@ -528,6 +533,7 @@ function bindBody() {
     const r = t.closest('[data-r]'); if (r) { settings.radius = +r.dataset.r; LS.set('settings', settings); drawCircle(); const p = sitePoint(S.sel); S.map.setLevel(levelFor(settings.radius)); S.map.setCenter(new kakao.maps.LatLng(p.lat - latShift(settings.radius), p.lng)); renderSheet(); drawLayer(); return; }
     const c = t.closest('[data-chr]'); if (c) { settings.chRadius = +c.dataset.chr; LS.set('settings', settings); renderSheet(); drawLayer(); return; }
     const so = t.closest('[data-sort]'); if (so) { S.sort = so.dataset.sort; renderSheetBody(); return; }
+    const ours = t.closest('[data-site]'); if (ours) return selectSite(ours.dataset.site);
     if (t.closest('[data-act="fix"]')) return startFix();
     if (t.closest('[data-act="draw"]')) return startDraw();
     const it = t.closest('.item'); if (it) {

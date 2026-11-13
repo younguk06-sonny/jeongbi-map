@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="정비맵">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
 
@@ -22,10 +22,13 @@
   <div class="top">
     <div class="bar">
       <div class="brand"><img src="icons/icon-192.png" alt=""><b>정비맵</b><small id="asOf">사업장 주변 시세·청약</small></div>
+      <button class="ibtn" id="btnZone" title="정비구역 표시 설정">🗂️</button>
       <button class="ibtn" id="btnAll" title="전체 사업장 보기">🧭</button>
       <button class="ibtn" id="btnSet" title="설정">⚙️</button>
     </div>
     <div class="chips" id="siteChips"></div>
+    <div class="zfilter" id="zfilter"></div>
+    <div class="zhint" id="zhint">지도를 확대하면 정비구역이 보여요</div>
   </div>
   <div class="fixbar" id="fixBar"><span class="grow">지도를 눌러 사업장 위치를 옮기세요</span><button class="btn sm" id="fixDone">완료</button></div>
   <div class="fixbar drawbar" id="drawBar"><span class="grow" id="drawInfo"></span>
@@ -80,6 +83,7 @@
 <div class="modal" id="modal"><div class="box" id="modalBox"></div></div>
 <div class="toast" id="toast"></div>
 
-<script src="app.js"></script>
+<script src="app.js?v=3"></script>
+<script src="zones.js?v=3"></script>
 </body>
 </html>
