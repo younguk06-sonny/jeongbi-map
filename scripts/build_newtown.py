@@ -18,6 +18,20 @@ CITIES = [
          ('반달마을A', 'R', ['반달마을(삼익', '반달마을(동아', '반달마을(선경', '반달마을(건영']),
          ('반달마을B', 'P', ['반달마을(극동']), ('복사골마을', 'P', ['복사골아파트', '복사골(']),
        ]),
+  # 산본: 산본신도시 정비기본계획 요약보고서 표 4-4-2. 리모델링·재건축 추진·주상복합으로 '예정구역에서 제외'된 단지는 뺌
+  dict(id='sb', name='군포 산본', codes=['41410'], dongs=['산본동', '금정동'], built=(1989, 1997), hint=[37.343, 126.912, 37.377, 126.952],
+       plan='군포시 산본신도시 노후계획도시정비기본계획(특별정비예정구역 16곳)',
+       url='https://www.gunpo.go.kr/',
+       zones=[
+         ('1구역', 'P', ['=목화', '=주공(1단지)', '=무궁화(화성)']), ('2구역', 'P', ['=충무주공(872)']),
+         ('3-1구역', 'P', ['퇴계주공(']), ('3-2구역', 'P', ['=다산주공(3단지)', '=삼익소월']),
+         ('4구역', 'P', ['=한라주공4']), ('5구역', 'P', ['=가야3주공', '=가야주공']),
+         ('6구역', 'P', ['=세종', '=삼익가든을지']), ('7구역', 'P', ['=솔거대림']),
+         ('8구역', 'P', ['=한양수리', '=덕유', '=계룡', '=설악', '=설악2']), ('9-1구역', 'P', ['=묘향(롯데)', '=주공9단지금강']),
+         ('9-2구역', 'D', ['=한양백두', '=백두(동성)', '=백두(극동)']), ('10구역', 'P', ['주몽']),
+         ('11구역', 'D', ['=백합', '=삼성장미']), ('12구역', 'P', ['=신안모란', '=한양목련', '=우방,한국공영목련']),
+         ('13구역', 'P', ['=동백(우성)']), ('14구역', 'P', ['=매화']),
+       ], notes={'9-2구역': '2025.12 특별정비구역 지정(선도지구)', '11구역': '2025.12 특별정비구역 지정(선도지구)'}),
 ]
 STAGE = {'P': '특별정비예정구역', 'R': '특별정비계획 주민공람', 'D': '특별정비구역 지정'}
 NOTE = {'R': '2026.10 특별정비계획(안) 주민공람', 'D': '2026.06 특별정비구역 지정·고시'}
@@ -30,10 +44,11 @@ for c in CITIES:
         cx += [(r[0], r[1], r[2], code) for r in d['cx'] if r[1] in c['dongs']]
     zs = []
     for n, st, pre in c['zones']:
-        apts = [[a, dong, code] for a, dong, b, code in cx if any(a.startswith(p) for p in pre) and b and c['built'][0] <= b <= c['built'][1]]
+        apts = [[a, dong, code] for a, dong, b, code in cx if any((a == p[1:]) if p[0] == '=' else a.startswith(p) for p in pre) and b and c['built'][0] <= b <= c['built'][1]]
         assert apts, n
-        z = {'n': n, 's': st, 'apts': apts}
-        if st in NOTE: z['note'] = NOTE[st]
+        z = {'n': (c['name'].split()[1] + ' ' + n) if n[0].isdigit() else n, 's': st, 'apts': apts}
+        if n in c.get('notes', {}): z['note'] = c['notes'][n]
+        elif st in NOTE and c['id'] == 'jd': z['note'] = NOTE[st]
         zs.append(z)
         print(c['name'], n, st, [a[0] for a in apts])
     out['cities'].append({k: c[k] for k in ('id', 'name', 'plan', 'url', 'hint')} | {'sido': '경기', 'zones': zs})
