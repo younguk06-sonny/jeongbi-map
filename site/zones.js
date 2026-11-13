@@ -6,7 +6,8 @@
 const Z = {
   meta: null, files: {}, polys: {}, labels: {}, shown: new Set(), shownLabels: new Set(), selId: null,
   on: Object.assign({ st: 1, rd: 1, rc: 1, sm: 1, pb: 1, et: 0 }, LS.get('zoneCats', {})),
-  showDone: LS.get('zoneDone', false), visible: LS.get('zoneOn', true), panel: false, busy: false, again: false,
+  stOn: Object.assign({ pre: 1, zone: 1, cmte: 1, assoc: 1, arch: 1, impl: 1, mgmt: 1, build: 1, done: LS.get('zoneDone', false) ? 1 : 0 }, LS.get('zoneStages', {})),
+  stCnt: {}, visible: LS.get('zoneOn', true), panel: false, busy: false, again: false,
 };
 const ZONE_MIN_LEVEL = 8;      // 이 레벨 이하(확대)에서 구역 표시 (구 단위)
 const ZONE_LABEL_LEVEL = 5;    // 이 레벨 이하: 사업명+단계 라벨 / 한 단계 위(동 단위): 사업명만
@@ -31,6 +32,23 @@ function zTitle(z) {
 function zDate(z) {
   const d = z.d || ''; if (!d) return '';
   return d.length === 8 ? `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}` : `${d}년`;
+}
+// 진행 단계 묶음 (단계 이름이 사업유형마다 달라 비슷한 단계를 9개로 묶음)
+const Z_STAGES = [
+  ['pre', '계획·예정', /대상지|기획|입안|열람|위원회|자문|사전검토|후보지|예정지구|계획 수립|추진계획|제안서|협상|공동위|안전진단|보류|예정구역|주민공람|행위제한/],
+  ['zone', '구역지정', /구역 지정|구역 변경|지구 지정|지구 변경|관리지역|정비구역 지정|특별정비구역 지정|결정고시|지구계획/],
+  ['cmte', '추진위·조합추진', /추진위|연번부여|조합설립 추진|주민합의체/],
+  ['assoc', '조합설립인가', /조합설립인가/],
+  ['arch', '건축심의', /건축|인허가 절차/],
+  ['impl', '사업시행인가', /사업시행인가|사업계획승인|실시계획|리모델링 허가/],
+  ['mgmt', '관리처분인가', /관리처분/],
+  ['build', '착공', /착공/],
+  ['done', '준공', /준공|입주/],
+];
+function zBucket(z) {
+  if (z._b) return z._b;
+  const t = zStage(z);
+  return (z._b = (Z_STAGES.find(([, , re]) => re.test(t)) || Z_STAGES[1])[0]);
 }
 const bbHit = (a, b) => !(a[2] < b[0] || a[0] > b[2] || a[3] < b[1] || a[1] > b[3]);
 
@@ -82,7 +100,7 @@ function ensurePoly(z) {
 
 function zoneVisible(z, view, lvl) {
   if (!Z.on[z.k]) return false;
-  if (!Z.showDone && zDone(z)) return false;
+  if (!Z.stOn[zBucket(z)]) return false;
   if (lvl >= ZONE_MIN_LEVEL && z.a < 20000 && z.id !== Z.selId) return false;
   return bbHit(z.bb, view);
 }
@@ -102,7 +120,12 @@ async function zonesRefresh() {
     const lists = await Promise.all(codes.map(loadZoneFile));
     const keep = new Set(), vis = [];
     if (on && typeof ntZonesIn === 'function') lists.push(ntZonesIn(view));
-    for (const list of lists) for (const z of list) if (zoneVisible(z, view, lvl)) { keep.add(z.id); vis.push(z); }
+    const cnt = {};
+    for (const list of lists) for (const z of list) {
+      if (Z.on[z.k] && bbHit(z.bb, view)) cnt[zBucket(z)] = (cnt[zBucket(z)] || 0) + 1;
+      if (zoneVisible(z, view, lvl)) { keep.add(z.id); vis.push(z); }
+    }
+    Z.stCnt = cnt; zoneStageCounts();
     for (const id of Z.shown) if (!keep.has(id)) Z.polys[id]?.forEach((pg) => pg.setMap(null));
     for (const z of vis) if (!Z.shown.has(z.id)) ensurePoly(z).forEach((pg) => pg.setMap(S.map));
     Z.shown = keep;
@@ -199,16 +222,23 @@ function renderZoneFilter() {
   el.innerHTML = `<div class="zf-row">
       <button class="zf-sw ${Z.visible ? 'on' : ''}" data-z="vis" role="switch" aria-checked="${Z.visible}"><span>정비구역</span><b class="swi"><i></i><em>${Z.visible ? 'ON' : 'OFF'}</em></b></button>
       ${Z.meta.cats.map(([k, l, c]) => `<button class="chip ${Z.on[k] ? 'on' : ''}" data-k="${k}" style="--c:${c}"><i></i>${l}</button>`).join('')}
-      <button class="chip ${Z.showDone ? 'on' : ''}" data-z="done" style="--c:#9aa4ae"><i></i>준공 포함</button>
+    </div>
+    <div class="zf-row zf-st"><span class="lbl">진행 단계</span>
+      ${Z_STAGES.map(([k, l], i) => `<button class="stc ${Z.stOn[k] ? 'on' : ''}" data-st="${k}"><b>${i + 1}</b>${l}<em data-stn="${k}"></em></button>`).join('')}
+      <button class="stc all" data-st="*">${Z_STAGES.every(([k]) => Z.stOn[k]) ? '선택 해제' : '전체'}</button>
     </div>`;
   el.onclick = (e) => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.k) { Z.on[b.dataset.k] = Z.on[b.dataset.k] ? 0 : 1; LS.set('zoneCats', Z.on); }
-    else if (b.dataset.z === 'done') { Z.showDone = !Z.showDone; LS.set('zoneDone', Z.showDone); }
+    else if (b.dataset.st === '*') { const all = Z_STAGES.every(([k]) => Z.stOn[k]); Z_STAGES.forEach(([k]) => (Z.stOn[k] = all ? 0 : 1)); LS.set('zoneStages', Z.stOn); }
+    else if (b.dataset.st) { Z.stOn[b.dataset.st] = Z.stOn[b.dataset.st] ? 0 : 1; LS.set('zoneStages', Z.stOn); }
     else if (b.dataset.z === 'vis') { Z.visible = !Z.visible; LS.set('zoneOn', Z.visible); }
     renderZoneFilter(); zonesRefresh();
   };
-  zoneTabLabel();
+  zoneTabLabel(); zoneStageCounts();
+}
+function zoneStageCounts() {
+  document.querySelectorAll('#zfilter [data-stn]').forEach((e) => { const n = Z.stCnt[e.dataset.stn] || 0; e.textContent = n ? n.toLocaleString() : ''; });
 }
 function zoneTabLabel() {
   const n = Object.values(Z.on).filter(Boolean).length;

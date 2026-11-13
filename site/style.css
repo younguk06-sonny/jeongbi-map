@@ -497,3 +497,13 @@ body.dr-on:has(.drawer.tool) .dr-toggle{left:min(460px,calc(100vw - 28px))}
 .zf-sw.on .swi{background:var(--good)}
 .zf-sw.on .swi i{left:37px}
 .zf-sw.on .swi em{margin-left:9px}
+
+/* 진행 단계 필터 */
+.zf-st{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);align-items:center}
+.stc{border:1px solid var(--line);background:var(--card);color:var(--sub);border-radius:999px;padding:5px 10px 5px 5px;font:inherit;font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.stc b{width:18px;height:18px;border-radius:50%;background:#e9ecef;color:#868e96;font-size:10.5px;display:grid;place-items:center}
+.stc em{font-style:normal;font-size:11px;font-weight:700;color:#adb5bd}
+.stc.on{border-color:#343a40;color:#212529;background:#f8f9fa}
+.stc.on b{background:#343a40;color:#fff}
+.stc.on em{color:#495057}
+.stc.all{padding:5px 10px;color:var(--accent);border-style:dashed}
