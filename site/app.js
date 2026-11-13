@@ -134,6 +134,7 @@ async function init() {
   drawAreas();
   refineSites();
   zonesInit();
+  salesInit();
   const id = decodeURIComponent((location.hash.match(/site=([^&]+)/) || [])[1] || '');
   if (id && S.sites.find((s) => s.id === id)) selectSite(id); else fitAll();
   addEventListener('hashchange', () => { const m = location.hash.match(/site=([^&]+)/); if (m && decodeURIComponent(m[1]) !== S.sel?.id) selectSite(decodeURIComponent(m[1])); });
@@ -191,6 +192,7 @@ function openTab(p) { // 상단 조건 탭 펼치기/접기
   $('#fpanel').classList.toggle('on', !!next);
   $('#sitePanel').classList.toggle('on', next === 'sites');
   $('#zfilter').classList.toggle('on', next === 'zones');
+  $('#salePanel').classList.toggle('on', next === 'sale');
   $$('#ftabs button').forEach((b) => b.classList.toggle('open', b.dataset.p === next));
   if (next === 'sites') renderChips();
 }
@@ -249,16 +251,18 @@ function fitAll() {
 async function selectSite(id) {
   const s = typeof id === 'object' ? id : S.sites.find((x) => x.id === id); if (!s) return;
   if (!s.zone) clearZoneSel();
+  if (!s.sale) clearSaleSel();
   id = s.id;
   if (!$('#v-map').classList.contains('on')) showView('map');
   S.sel = s; S.sheetTab = S.sheetTab || 'info';
   history.replaceState(null, '', s.zone ? location.pathname : '#site=' + encodeURIComponent(id));
-  $('#ftabs .ft-site').classList.toggle('on', !s.zone);
-  $('#ftabs .ft-site span').textContent = s.zone ? '🏗️ 당사 사업장' : '🏗️ ' + s.name;
+  const ours = !s.zone && !s.sale;
+  $('#ftabs .ft-site').classList.toggle('on', ours);
+  $('#ftabs .ft-site span').textContent = ours ? '🏗️ ' + s.name : '🏗️ 당사 사업장';
   Object.entries(S.siteMarks).forEach(([k, m]) => { m.el.classList.toggle('sel', k === id); m.el.classList.toggle('dim', !s.zone && k !== id); });
   if (!S.map) return;
   const p = sitePoint(s);
-  if (s.zone && S.map.getLevel() <= levelFor(settings.radius)) S.map.panTo(new kakao.maps.LatLng(p.lat - latShift(settings.radius) * S.map.getLevel() / levelFor(settings.radius), p.lng));
+  if ((s.zone || s.sale) && S.map.getLevel() <= levelFor(settings.radius)) S.map.panTo(new kakao.maps.LatLng(p.lat - latShift(settings.radius) * S.map.getLevel() / levelFor(settings.radius), p.lng));
   else { S.map.setLevel(levelFor(settings.radius)); S.map.setCenter(new kakao.maps.LatLng(p.lat - latShift(settings.radius), p.lng)); }
   drawCircle(); if (S.map) drawAreas();
   S.an = { site: s, status: '주변 자료 찾는 중…', prog: 0, cx: null, ch: null, addr: '' };
@@ -267,7 +271,7 @@ async function selectSite(id) {
   analyze(s);
 }
 function closeSite() {
-  S.sel = null; S.an = null; clearLayer(); clearZoneSel();
+  S.sel = null; S.an = null; clearLayer(); clearZoneSel(); clearSaleSel();
   if (S.circle) { S.circle.setMap(null); S.circle = null; }
   Object.values(S.siteMarks).forEach((m) => m.el.classList.remove('sel', 'dim'));
   $('#ftabs .ft-site').classList.remove('on'); $('#ftabs .ft-site span').textContent = '🏗️ 당사 사업장';
@@ -418,7 +422,7 @@ function renderSheet() {
   const k = (lbl, v, unit) => `<div class="kpi"><small>${lbl}</small><b class="num">${v}${unit ? `<em>${unit}</em>` : ''}</b></div>`;
   $('#shHead').innerHTML = `
     <div class="sh-title"><h2>${esc(s.name)}</h2><button class="x" title="닫기">✕</button></div>
-    <div class="sh-sub">${s.zone ? `<span class="badge" style="--c:${zColor(s.zone)}">${esc(zShort(s.zone))}</span>${esc(s.stage)} · ${fmtN(s.zone.a / 3.3058)}평` : `<span class="badge" style="--c:${typeColor(s.type)}">${esc(s.type)}</span>${fmtN(s.households)}세대 · ${esc(s.stage)}`}</div>
+    <div class="sh-sub">${s.sale ? `<span class="badge" style="--c:${saleColor(s.sale.__t)}">${s.sale.__t === 'apt' ? '아파트' : '오피스텔·도시형'}</span>${esc(s.stage)} · ${fmtN(s.sale.total)}세대` : s.zone ? `<span class="badge" style="--c:${zColor(s.zone)}">${esc(zShort(s.zone))}</span>${esc(s.stage)} · ${fmtN(s.zone.a / 3.3058)}평` : `<span class="badge" style="--c:${typeColor(s.type)}">${esc(s.type)}</span>${fmtN(s.households)}세대 · ${esc(s.stage)}`}</div>
     <div class="kpis">
       ${k(`${fmtR(settings.radius)} 평균 평당`, sm?.all ? fmtN(sm.all.v) : (S.an?.cx ? '–' : '…'), sm?.all ? '만' : '')}
       ${k('10년 이내 평당', sm?.nw ? fmtN(sm.nw.v) : (S.an?.cx ? '–' : '…'), sm?.nw ? '만' : '')}
@@ -441,6 +445,7 @@ function renderSheetBody() {
 
 function infoHTML(s, an) {
   if (s.zone) return zoneInfoHTML(s, an);
+  if (s.sale) return saleInfoHTML(s, an);
   return `
     <dl class="dl">
       <dt>사업유형</dt><dd>${esc(s.type)}</dd>
@@ -557,6 +562,7 @@ function bindBody() {
     const c = t.closest('[data-chr]'); if (c) { settings.chRadius = +c.dataset.chr; LS.set('settings', settings); renderSheet(); drawLayer(); return; }
     const so = t.closest('[data-sort]'); if (so) { S.sort = so.dataset.sort; renderSheetBody(); return; }
     const ours = t.closest('[data-site]'); if (ours) return selectSite(ours.dataset.site);
+    const ss = t.closest('[data-savesale]'); if (ss && S.sel?.sale) { toggleSaveCal(Object.assign({ sd: S.sel.sale.sgg || '' }, S.sel.sale)); ss.classList.toggle('on', isSaved('ch', S.sel.sale.id)); return; }
     if (t.closest('[data-act="fix"]')) return startFix();
     if (t.closest('[data-act="draw"]')) return startDraw();
     const it = t.closest('.item'); if (it) {
@@ -582,7 +588,7 @@ function drawLayer() {
     const ov = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(r.lat, r.lng), content: el, yAnchor: .5, zIndex: 3 });
     ov.setMap(S.map); S.layer.push(ov); S.layerEls[cxId(r)] = el;
   }
-  for (const it of (an.ch || []).filter((x) => x.d <= settings.chRadius)) {
+  for (const it of (SL.visible && SL.on.apt ? [] : (an.ch || []).filter((x) => x.d <= settings.chRadius))) { // 분양 레이어가 켜져 있으면 중복 표시 안 함
     const el = document.createElement('div'); el.className = 'mk-ch' + (it.winner < TODAY ? ' done' : '');
     el.textContent = (it.winner >= TODAY ? '청약 ' : it.mvn >= NOW_YM ? '입주 ' + fmtYm(it.mvn) + ' ' : '') + (lvl <= 5 ? it.name.slice(0, 12) : '');
     el.onclick = (e) => { e.stopPropagation(); openItem('supply', 'ch|' + it.id); };

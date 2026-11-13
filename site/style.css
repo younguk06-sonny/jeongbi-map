@@ -397,3 +397,22 @@ a{color:var(--accent)}
 .rg-cell.sd:active{transform:none}
 .rg-grid.sgg .rg-cell{border-left:3px solid var(--g)}
 .rg-grid.sgg .rg-cell:hover,.rg-grid.sgg .rg-cell.on{border-color:var(--g);background:color-mix(in srgb,var(--g) 9%,var(--card))}
+
+/* ---------- 분양 레이어 ---------- */
+.mk-sale{--c:#e8590c;position:relative;display:flex;align-items:center;gap:5px;background:var(--card);border:1.5px solid var(--c);border-radius:9px;padding:3px 7px;
+  font-size:11.5px;white-space:nowrap;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.2);color:var(--ink)}
+.mk-sale::after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-5px;border:5px solid transparent;border-top-color:var(--c);border-bottom:0}
+.mk-sale b{font-weight:800;letter-spacing:-.3px}
+.mk-sale span{font-weight:800;color:var(--c)}
+.mk-sale i{font-style:normal;font-size:10px;font-weight:900;color:#fff;background:var(--c);border-radius:5px;padding:1px 4px}
+.mk-sale.now{background:var(--c);color:#fff}.mk-sale.now span{color:#fff}.mk-sale.now i{background:#fff;color:var(--c)}
+.mk-sale.old{opacity:.72;border-style:dashed}
+.mk-sale.sel{transform:scale(1.12);z-index:20;box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 30%,transparent),0 3px 10px rgba(0,0,0,.25)}
+.zf-row .lbl{font-size:12px;font-weight:700;color:var(--sub);align-self:center;margin-right:2px}
+.pchip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;color:var(--sub)}
+.pchip.on{background:var(--ink);border-color:var(--ink);color:var(--card)}
+.chip.dis:not(.on){opacity:.6}
+.sale-top{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:10px}
+.badge.st-soon{--c:#f08c00}.badge.st-now{--c:#e03131}.badge.st-done{--c:#868e96}.badge.st-old{--c:#adb5bd}
+.stagebar.sale .st span b{font-weight:700;color:var(--ink)}
+.upc{color:#d6336c}.downc{color:#1c7ed6}

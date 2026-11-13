@@ -186,6 +186,12 @@ async function main() {
     });
   }
 
+  // 오피스텔·도시형 분양 (레이더가 받아 둔 경우만)
+  const ofDir = path.join(SRC, 'public', 'data', 'officetel');
+  try {
+    await fs.mkdir(path.join(OUT, 'officetel'), { recursive: true });
+    for (const f of await fs.readdir(ofDir)) if (f.endsWith('.json')) await fs.copyFile(path.join(ofDir, f), path.join(OUT, 'officetel', f));
+  } catch { console.log('오피스텔 분양 자료 없음(레이더 수집 전)'); }
   // 청약 자료는 그대로 복사
   const chDir = path.join(SRC, 'public', 'data', 'cheongyak');
   for (const f of await fs.readdir(chDir)) {
