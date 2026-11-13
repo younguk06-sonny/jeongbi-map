@@ -8,8 +8,8 @@ const Z = {
   on: Object.assign({ st: 1, rd: 1, rc: 1, sm: 1, pb: 1, et: 0 }, LS.get('zoneCats', {})),
   showDone: LS.get('zoneDone', false), visible: LS.get('zoneOn', true), panel: false, busy: false, again: false,
 };
-const ZONE_MIN_LEVEL = 7;      // 이 레벨 이하(확대)에서 구역 표시
-const ZONE_LABEL_LEVEL = 4;    // 이 레벨 이하에서 모든 라벨
+const ZONE_MIN_LEVEL = 8;      // 이 레벨 이하(확대)에서 구역 표시 (구 단위)
+const ZONE_LABEL_LEVEL = 5;    // 이 레벨 이하: 사업명+단계 라벨 / 한 단계 위(동 단위): 사업명만
 const SHORT = {
   BZ101: '신통', BZ102: '재개발', BZ103: '재개발', BZ104: '재건축', BZ105: '재건축', BZ107: '주거환경', BZ108: '주거환경',
   BZ201: '모아타운', BZ202: '가로주택', BZ203: '자율주택', BZ204: '소규모재건축', BZ205: '소규모재개발',
@@ -81,7 +81,7 @@ function ensurePoly(z) {
 function zoneVisible(z, view, lvl) {
   if (!Z.on[z.k]) return false;
   if (!Z.showDone && zDone(z)) return false;
-  if (lvl >= ZONE_MIN_LEVEL && z.a < 15000 && z.id !== Z.selId) return false;
+  if (lvl >= ZONE_MIN_LEVEL && z.a < 20000 && z.id !== Z.selId) return false;
   return bbHit(z.bb, view);
 }
 
@@ -114,8 +114,9 @@ async function zonesRefresh() {
 function drawZoneLabels(vis, lvl) {
   const want = new Map();
   const maxL = S.an && S.an.cx ? ZONE_LABEL_LEVEL - 1 : ZONE_LABEL_LEVEL; // 시세 배지가 떠 있으면 한 단계 더 확대했을 때만
-  if (lvl <= maxL + 1 || Z.selId) {
-    const list = vis.filter((z) => lvl <= maxL || (lvl === maxL + 1 && z.a >= 40000) || z.id === Z.selId).sort((a, b) => b.a - a.a);
+  const mini = lvl > maxL; // 동 단위로 당기면 사업명만 작게
+  if (lvl <= maxL + 2 || Z.selId) {
+    const list = vis.filter((z) => lvl <= maxL + 1 || (lvl === maxL + 2 && z.a >= 30000) || z.id === Z.selId).sort((a, b) => b.a - a.a);
     for (const z of list) {
       const key = Math.round(z.c.lat * 2500) + ':' + Math.round(z.c.lng * 2000);
       if (!want.has(key)) want.set(key, []);
@@ -124,12 +125,12 @@ function drawZoneLabels(vis, lvl) {
   }
   const keys = new Set();
   for (const [key, zs] of want) {
-    const sig = key + '|' + zs.map((z) => z.id).join(',') + '|' + (zs.some((z) => z.id === Z.selId) ? 1 : 0);
+    const sig = key + '|' + zs.map((z) => z.id).join(',') + '|' + (zs.some((z) => z.id === Z.selId) ? 1 : 0) + (mini ? 'm' : '');
     keys.add(sig);
     if (Z.labels[sig]) { if (!Z.shownLabels.has(sig)) Z.labels[sig].setMap(S.map); continue; }
     const el = document.createElement('div');
     el.className = 'zl' + (zs.some((z) => z.id === Z.selId) ? ' sel' : '');
-    el.innerHTML = zs.slice(0, 3).map((z) => `<div class="zr${zDone(z) ? ' done' : ''}" data-id="${esc(z.id)}" style="--c:${zColor(z)}"><b>${esc(zTitle(z))}</b><span>${esc(zStage(z))}</span></div>`).join('');
+    el.innerHTML = zs.slice(0, mini ? 2 : 3).map((z) => `<div class="zr${zDone(z) ? ' done' : ''}${mini ? ' mini' : ''}" data-id="${esc(z.id)}" style="--c:${zColor(z)}"><b>${esc(zTitle(z))}</b>${mini ? '' : `<span>${esc(zStage(z))}</span>`}</div>`).join('');
     el.onclick = (e) => { e.stopPropagation(); const r = e.target.closest('.zr'); const z = zs.find((x) => x.id === r?.dataset.id) || zs[0]; selectZone(z); };
     const ov = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(zs[0].c.lat, zs[0].c.lng), content: el, yAnchor: .5, zIndex: 6 });
     ov.setMap(S.map); Z.labels[sig] = ov;

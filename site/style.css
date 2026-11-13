@@ -376,3 +376,6 @@ a{color:var(--accent)}
 .tl-head .x{font-size:15px}
 .tl-w{margin-left:auto;font-size:11px;font-weight:800;color:var(--accent);letter-spacing:.06em}
 .study-fab svg{width:18px;height:18px;fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+.zr.mini{border-width:1px;border-radius:5px;max-width:130px}
+.zr.mini b{padding:1px 6px;font-size:10.5px;font-weight:700}
