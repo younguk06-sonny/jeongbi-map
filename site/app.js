@@ -118,15 +118,17 @@ async function init() {
   try {
     const [sites, meta] = await Promise.all([getJSON('data/sites.json'), getJSON('data/meta.json').catch(() => null)]);
     S.sites = sites.sites; S.meta = meta;
-    if (meta) $('#asOf').textContent = `실거래 ${fmtYm(meta.tradeTo)}까지 · ${meta.builtAt.slice(5, 10).replace('-', '.')} 갱신`;
+    if (meta) $('#asOf').textContent = `실거래가 ${fmtYm(meta.tradeTo)}까지 · ${meta.builtAt.slice(5, 10).replace('-', '.')} 갱신`;
   } catch (e) { $('#mapMsg').textContent = '사업장 자료를 불러오지 못했어요. 잠시 뒤 새로고침해 주세요.'; return; }
   renderChips(); renderSites(); renderSaved();
+  if ($('#drawer').classList.contains('on')) renderDrawer();
   const ok = await Kakao.ready();
   if (!ok) { $('#mapMsg').innerHTML = '카카오 지도를 불러오지 못했어요.<br>인터넷 연결을 확인하거나 ⚙️ 설정에서 카카오 키를 확인해 주세요.'; return; }
   $('#mapMsg').remove();
   S.map = new kakao.maps.Map($('#map'), { center: new kakao.maps.LatLng(36.6, 127.8), level: 12 });
   S.map.addControl(new kakao.maps.ZoomControl(), kakao.maps.ControlPosition.RIGHT);
-  kakao.maps.event.addListener(S.map, 'click', (e) => { if (S.draw) addVertex(e.latLng); else if (S.fix) moveSite(e.latLng); });
+  kakao.maps.event.addListener(S.map, 'click', (e) => { if (S.draw) addVertex(e.latLng); else if (S.fix) moveSite(e.latLng); else openTab(null); });
+  kakao.maps.event.addListener(S.map, 'idle', updateWhere);
   kakao.maps.event.addListener(S.map, 'zoom_changed', () => drawLayer());
   drawSites();
   drawAreas();
@@ -142,9 +144,9 @@ function bindUI() {
   $('#stabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; S.sheetTab = b.dataset.t; $$('#stabs button').forEach((x) => x.classList.toggle('on', x === b)); renderSheetBody(); setSheet('open'); });
   $('#handle').addEventListener('click', () => setSheet($('#sheet').classList.contains('open') ? 'show' : 'open'));
   $('#shHead').addEventListener('click', (e) => { if (e.target.closest('.x')) return closeSite(); if (!$('#sheet').classList.contains('open')) setSheet('open'); });
-  $('#btnAll').addEventListener('click', () => { closeSite(); fitAll(); });
   $('#btnSet').addEventListener('click', openSettings);
-  $('#btnZone').addEventListener('click', () => toggleZonePanel());
+  $('#ftabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) openTab(b.dataset.p); });
+  regionBind();
   $('#btnMe').addEventListener('click', locateMe);
   $('#btnCad').addEventListener('click', () => setCadastral(!S.cadastral));
   $('#drawBar').addEventListener('click', (e) => { const b = e.target.closest('[data-d]'); if (b) drawAct(b.dataset.d); });
@@ -169,10 +171,27 @@ function showView(v) {
 }
 
 // ---------- 사업장 ----------
-function renderChips() {
-  $('#siteChips').innerHTML = S.sites.map((s) =>
-    `<button class="chip" data-id="${esc(s.id)}" style="--c:${typeColor(s.type)}"><i></i>${esc(s.name)}</button>`).join('');
-  $('#siteChips').onclick = (e) => { const b = e.target.closest('.chip'); if (b) selectSite(b.dataset.id); };
+function renderChips() { // 상단 '당사 사업장' 탭의 펼침 목록
+  $('#siteCnt').textContent = S.sites.length;
+  const groups = {};
+  for (const s of S.sites) (groups[s.sido] ||= []).push(s);
+  $('#sitePanel').innerHTML = `<div class="sp-head"><b>당사 정비사업장 ${S.sites.length}곳</b><button class="btn sm p" data-all="1">🧭 전체 지도에 보기</button></div>
+    ${Object.entries(groups).map(([sd, arr]) => `<div class="sp-grp"><div class="sp-sd">${esc(sd)} <small>${arr.length}</small></div>
+      ${arr.map((s) => `<button class="sp-item${S.sel && S.sel.id === s.id ? ' on' : ''}" data-id="${esc(s.id)}"><i style="background:${typeColor(s.type)}"></i><span class="grow"><b>${esc(s.name)}</b><small>${esc(s.sgg)} · ${esc(typeShort(s.type))} · ${fmtN(s.households)}세대</small></span><em>${esc(s.stage)}</em></button>`).join('')}</div>`).join('')}`;
+  $('#sitePanel').onclick = (e) => {
+    if (e.target.closest('[data-all]')) { openTab(null); closeSite(); fitAll(); return; }
+    const b = e.target.closest('.sp-item'); if (b) { openTab(null); selectSite(b.dataset.id); }
+  };
+}
+function openTab(p) { // 상단 조건 탭 펼치기/접기
+  const cur = $('#fpanel').dataset.p || null;
+  const next = p && p !== cur ? p : null;
+  $('#fpanel').dataset.p = next || '';
+  $('#fpanel').classList.toggle('on', !!next);
+  $('#sitePanel').classList.toggle('on', next === 'sites');
+  $('#zfilter').classList.toggle('on', next === 'zones');
+  $$('#ftabs button').forEach((b) => b.classList.toggle('open', b.dataset.p === next));
+  if (next === 'sites') renderChips();
 }
 function renderSites() {
   const kinds = ['전체', '재개발', '재건축', '소규모·가로'];
@@ -233,8 +252,8 @@ async function selectSite(id) {
   if (!$('#v-map').classList.contains('on')) showView('map');
   S.sel = s; S.sheetTab = S.sheetTab || 'info';
   history.replaceState(null, '', s.zone ? location.pathname : '#site=' + encodeURIComponent(id));
-  $$('#siteChips .chip').forEach((b) => b.classList.toggle('on', b.dataset.id === id));
-  $(`#siteChips .chip[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  $('#ftabs .ft-site').classList.toggle('on', !s.zone);
+  $('#ftabs .ft-site span').textContent = s.zone ? '🏗️ 당사 사업장' : '🏗️ ' + s.name;
   Object.entries(S.siteMarks).forEach(([k, m]) => { m.el.classList.toggle('sel', k === id); m.el.classList.toggle('dim', !s.zone && k !== id); });
   if (!S.map) return;
   const p = sitePoint(s);
@@ -250,7 +269,7 @@ function closeSite() {
   S.sel = null; S.an = null; clearLayer(); clearZoneSel();
   if (S.circle) { S.circle.setMap(null); S.circle = null; }
   Object.values(S.siteMarks).forEach((m) => m.el.classList.remove('sel', 'dim'));
-  $$('#siteChips .chip').forEach((b) => b.classList.remove('on'));
+  $('#ftabs .ft-site').classList.remove('on'); $('#ftabs .ft-site span').textContent = '🏗️ 당사 사업장';
   history.replaceState(null, '', location.pathname);
   setSheet('hide');
 }
@@ -785,4 +804,4 @@ function openSettings() {
 }
 
 addEventListener('resize', () => { if (S.sel) setSheet($('#sheet').classList.contains('full') ? 'full' : $('#sheet').classList.contains('open') ? 'open' : 'show'); });
-init();
+addEventListener('DOMContentLoaded', init); // zones.js·region.js까지 읽힌 뒤 시작

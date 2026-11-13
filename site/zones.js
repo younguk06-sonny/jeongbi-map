@@ -39,6 +39,7 @@ async function zonesInit() {
   kakao.maps.event.addListener(S.map, 'idle', zonesRefresh);
   renderZoneFilter();
   zonesRefresh();
+  if ($('#drawer').classList.contains('on') && !R.q) renderDrawer();
 }
 
 async function loadZoneFile(code) {
@@ -202,9 +203,10 @@ function renderZoneFilter() {
     else if (b.dataset.z === 'vis') { Z.visible = !Z.visible; LS.set('zoneOn', Z.visible); }
     renderZoneFilter(); zonesRefresh();
   };
+  zoneTabLabel();
 }
-function toggleZonePanel(force) {
-  Z.panel = force ?? !Z.panel;
-  $('#zfilter').classList.toggle('on', Z.panel);
-  $('#btnZone').classList.toggle('on', Z.panel);
+function zoneTabLabel() {
+  const n = Object.values(Z.on).filter(Boolean).length;
+  const el = $('#zoneCnt'); if (el) el.textContent = Z.visible ? `${n}/${Z.meta.cats.length}` : '끔';
+  $('#ftabs [data-p="zones"]')?.classList.toggle('on', Z.visible);
 }

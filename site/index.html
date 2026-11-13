@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="정비맵">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 
@@ -21,13 +21,21 @@
   <div id="map"><div class="mapmsg" id="mapMsg">지도를 불러오는 중…</div></div>
   <div class="top">
     <div class="bar">
-      <div class="brand"><img src="icons/icon-192.png" alt=""><b>정비맵</b><small id="asOf">사업장 주변 시세·청약</small></div>
-      <button class="ibtn" id="btnZone" title="정비구역 표시 설정">🗂️</button>
-      <button class="ibtn" id="btnAll" title="전체 사업장 보기">🧭</button>
+      <button class="search" id="btnRegion" title="지역 선택·검색">
+        <img src="icons/icon-192.png" alt="">
+        <span class="where"><b id="where">지역 선택</b><small>시도·시군구·구역·단지 검색</small></span>
+        <i>🔍</i>
+      </button>
       <button class="ibtn" id="btnSet" title="설정">⚙️</button>
     </div>
-    <div class="chips" id="siteChips"></div>
-    <div class="zfilter" id="zfilter"></div>
+    <div class="ftabs" id="ftabs">
+      <button data-p="sites" class="ft-site"><span>🏗️ 당사 사업장</span><em id="siteCnt"></em><i>▾</i></button>
+      <button data-p="zones"><span>🗂️ 정비구역</span><em id="zoneCnt"></em><i>▾</i></button>
+    </div>
+    <div class="fpanel" id="fpanel">
+      <div class="fp-sites" id="sitePanel"></div>
+      <div class="zfilter" id="zfilter"></div>
+    </div>
     <div class="zhint" id="zhint">지도를 확대하면 정비구역이 보여요</div>
   </div>
   <div class="fixbar" id="fixBar"><span class="grow">지도를 눌러 사업장 위치를 옮기세요</span><button class="btn sm" id="fixDone">완료</button></div>
@@ -80,10 +88,22 @@
   <button data-v="saved"><span>⭐</span>저장</button>
 </nav>
 
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="지역 선택">
+  <div class="dr-head">
+    <input class="input" id="q" type="search" placeholder="시도·시군구·동·구역·단지 검색" autocomplete="off" enterkeyhint="search">
+    <button class="x" id="drClose" title="닫기">✕</button>
+  </div>
+  <div class="dr-crumb" id="crumb"></div>
+  <div class="dr-body" id="drBody"></div>
+  <div class="dr-foot" id="asOf"></div>
+</aside>
+
 <div class="modal" id="modal"><div class="box" id="modalBox"></div></div>
 <div class="toast" id="toast"></div>
 
-<script src="app.js?v=3"></script>
-<script src="zones.js?v=3"></script>
+<script src="app.js?v=4"></script>
+<script src="zones.js?v=4"></script>
+<script src="region.js?v=4"></script>
 </body>
 </html>
