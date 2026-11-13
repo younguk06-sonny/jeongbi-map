@@ -348,7 +348,7 @@ a{color:var(--accent)}
 @media (max-width:899px){ .legend{left:110px} }
 @media (min-width:900px){ .study-fab{display:none} }
 
-/* ---------- 지역 시그널 (스터디 그리드 대체) ---------- */
+/* ---------- 지역 세부내용 (스터디 그리드 대체) ---------- */
 .dr-study{padding:0;background:var(--card2)}
 .sig-h{width:100%;display:flex;align-items:baseline;gap:8px;border:0;background:none;padding:11px 14px 8px;cursor:pointer;color:var(--ink);text-align:left}
 .sig-t{font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--accent);text-transform:uppercase}

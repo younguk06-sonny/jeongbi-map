@@ -1,4 +1,4 @@
-/* 정비맵 — 지역 시그널 (지금 보는 지역의 시장 신호판)
+/* 정비맵 — 지역 세부내용 (지금 보는 지역의 시장 신호판)
    청약 · 실거래가 · 가격 비교 · 여러 단지 비교 · 공급량 · 미분양 · 개발호재
    자료: data/study.json (분양시장 레이더 자료를 매일 요약), data/near/*.json, data/cheongyak/*.json */
 'use strict';
@@ -33,7 +33,7 @@ async function studyData() {
   return ST.data;
 }
 
-// ---------- 지역 시그널 (왼쪽 창 아래 신호판) ----------
+// ---------- 지역 세부내용 (왼쪽 창 아래 신호판) ----------
 function spark(vals, kind = 'line', color = 'var(--accent)') {
   const v = vals.map((x) => (x == null ? null : +x)); const ok = v.filter((x) => x != null);
   if (ok.length < 2) return '<span class="spk"></span>';
@@ -90,7 +90,7 @@ async function signals(d, sc) {
 async function renderStudyGrid() {
   const el = $('#drStudy'); if (!el) return;
   const sc = scopeNow(), n = ++ST.sigN;
-  const head = `<button class="sig-h" data-fold="1"><span class="sig-t">지역 시그널</span><span class="sig-w">${esc(scopeLabel(sc))}</span><i>${ST.fold ? '▴' : '▾'}</i></button>`;
+  const head = `<button class="sig-h" data-fold="1"><span class="sig-t">지역 세부내용</span><span class="sig-w">${esc(scopeLabel(sc))}</span><i>${ST.fold ? '▴' : '▾'}</i></button>`;
   const row = (id, s, name) => `<button class="sig-row" data-tool="${id}">${ico(STUDY_TOOLS.find((x) => x.id === id).icon)}<span class="sig-n">${name}</span><span class="sig-v"><b class="num">${s?.v ?? '…'}</b><span class="sig-s">${s?.sub ?? ''}</span></span>${s?.spk ?? '<span class="spk"></span>'}</button>`;
   const cmpRow = `<div class="sig-row cmp">${ico('cmp')}<span class="sig-n">단지 비교</span><span class="sig-v"><b class="num">${ST.cmp.length}<small>곳 담김</small></b><span class="sig-s"><span class="cap">＋ 버튼으로 담기</span></span></span><span class="sig-btns"><button class="btn sm" data-tool="vs">1:1</button><button class="btn sm" data-tool="mc">여럿</button></span></div>`;
   const draw = (S_) => {
@@ -143,7 +143,7 @@ async function openTool(id) {
   openDrawer(true);
   $('#drawer').classList.add('tool');
   const t = STUDY_TOOLS.find((x) => x.id === id);
-  $('#drTool').innerHTML = `<div class="tl-head"><button class="x" data-back="1" title="시그널로 돌아가기">←</button>${ico(t.icon, 'si big')}<b>${t.name}</b><span class="tl-w">지역 시그널</span></div><div class="tl-body" id="tlBody"><div class="empty">불러오는 중…</div></div>`;
+  $('#drTool').innerHTML = `<div class="tl-head"><button class="x" data-back="1" title="지역 세부내용으로 돌아가기">←</button>${ico(t.icon, 'si big')}<b>${t.name}</b><span class="tl-w">지역 세부내용</span></div><div class="tl-body" id="tlBody"><div class="empty">불러오는 중…</div></div>`;
   $('#drTool').onclick = onToolClick;
   $('#drTool').oninput = onToolInput;
   await renderTool();
