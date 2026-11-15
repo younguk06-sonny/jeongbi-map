@@ -44,12 +44,13 @@ function basisSaleHTML(sm, s) {
     <div class="bs-v"><b class="num">${sm.sale ? fmtN(sm.sale) + '만/평' : '자료 없음'}</b><span>${s ? esc(s.name) + ' 기준 · ' : ''}${sm.saleUsed.length}개 단지 · ${fmtN(sm.saleN)}세대 가중</span></div>
     <div class="bs-f"><b>산식</b> 단지별 Σ(주택형 최고 분양가 ÷ 전용면적 × 3.3058 × 주택형 세대수) ÷ Σ세대수 → 전체도 세대수로 가중평균<br>
       기간: 입주자모집공고일 ${SALE_FROM.replace(/-/g, '.')} 이후 · 범위: 공고 주소 위치까지 직선 ${fmtR(settings.chRadius)} 이내<br>
-      포함: 민영 분양주택, 국민(공공) 분양주택 · <b>제외: 임대(분양전환 가능 임대 포함)</b> · 세대수는 주택형별 일반+특별공급<br>
-      잔여세대·무순위 공고는 청약홈 APT 분양정보 자료에 없어 이 값에 들어 있지 않아요. 평당가는 <b>전용면적 기준</b>(공급면적 기준보다 큼).</div>
+      포함: 민영 분양주택, 국민(공공) 분양주택 · <b>제외: 임대(분양전환 가능 임대 포함), 무순위·잔여세대(이미 분양한 단지의 재공급이라 중복)</b> · 세대수는 주택형별 일반+특별공급<br>
+      평당가는 <b>전용면적 기준</b>(공급면적 기준보다 큼).</div>
     ${rows ? `<table class="bs-t"><thead><tr><th>포함 단지</th><th>공고일</th><th>거리</th><th>세대(가중)</th><th>평당(만)</th></tr></thead><tbody>${rows}</tbody>
       <tfoot><tr><td>합계</td><td></td><td></td><td class="num">${fmtN(sm.saleN)}</td><td class="num">${fmtN(sm.sale)}</td></tr></tfoot></table>` : '<div class="empty">기간·반경 안에 집계할 분양 단지가 없어요.</div>'}
-    ${sm.saleRent.length || sm.saleNoType.length ? `<div class="bs-x"><b>집계에서 빠진 공고</b>
+    ${sm.saleRent.length || sm.saleNoType.length || sm.saleRem?.length ? `<div class="bs-x"><b>집계에서 빠진 공고</b>
       ${sm.saleRent.map((it) => `<div>${esc(it.name)} <span class="meta">· ${esc(it.kind)} · 임대라서 제외</span></div>`).join('')}
+      ${(sm.saleRem || []).map((it) => `<div>${esc(it.name)} <span class="meta">· 무순위·잔여세대 · 재공급이라 제외</span></div>`).join('')}
       ${sm.saleNoType.map((it) => `<div>${esc(it.name)} <span class="meta">· 주택형별 분양가 자료 없음</span></div>`).join('')}</div>` : ''}
     <div class="btns"><button class="btn" onclick="closeModal()">닫기</button></div></div>`;
 }
@@ -84,8 +85,8 @@ const CHK = { on: Object.assign({ pri: 1, pub: 1, rent: 1, rem: 1 }, LS.get('chK
 function chFilterHTML(list) {
   const cnt = (k) => list.filter((it) => chKindOf(it) === k).length;
   return `<div class="seg chk"><span class="lbl">유형</span>${CH_KINDS.map(([k, l]) => {
-    const n = k === 'rem' ? 0 : cnt(k);
-    return `<button data-chk="${k}" class="${CHK.on[k] && k !== 'rem' ? 'on' : ''}" ${k === 'rem' ? 'disabled title="잔여세대·무순위 공고는 수집 자료에 없어요"' : ''}>${l} <small>${k === 'rem' ? '자료 없음' : n}</small></button>`;
+    const none = k === 'rem' && !S.remOk; // 레이더가 아직 무순위·잔여세대를 받지 못한 경우
+    return `<button data-chk="${k}" class="${CHK.on[k] && !none ? 'on' : ''}" ${none ? 'disabled title="무순위·잔여세대 자료를 아직 받지 못했어요"' : k === 'rem' ? 'title="무순위·잔여세대(사후접수·계약취소 재공급 포함)"' : ''}>${l} <small>${none ? '자료 없음' : cnt(k)}</small></button>`;
   }).join('')}</div>`;
 }
 const chPass = (it) => !!CHK.on[chKindOf(it)];
@@ -102,5 +103,5 @@ function chTypesHTML(it) {
   if (!ty.length && !c) return '';
   return `${ty.length ? `<table class="ch-ty num"><thead><tr><th>전용㎡</th><th>공급㎡</th><th>최고 분양가</th><th>전용 평당</th><th>세대(일반+특별)</th></tr></thead><tbody>
     ${ty.map((t) => `<tr><td>${t[0]}</td><td>${t[1] ?? '–'}</td><td>${t[2] ? fmtEok(t[2]) : '–'}</td><td>${t[0] && t[2] ? fmtN(t[2] / (t[0] / 3.3058)) + '만' : '–'}</td><td>${t[3] ?? '–'}</td></tr>`).join('')}</tbody></table>` : ''}
-    ${c ? `<div class="meta">일반공급 ${fmtN(c.supply)}세대 · 1순위 신청 ${fmtN(c.r1)}건 · 2순위 신청 ${fmtN(c.r2)}건${c.avg1 != null ? ` · 1순위 평균 ${c.avg1}:1` : ''}${c.shortUnits ? ` · 미달 ${fmtN(c.shortUnits)}세대` : ''} <span class="unk">주택형별 신청건수 미보관</span></div>` : '<div class="meta">경쟁률 자료 없음</div>'}`;
+    ${c && c.r1 == null && c.req != null ? `<div class="meta">신청 ${fmtN(c.req)}건${c.rate != null ? ` · 경쟁률 ${c.rate}:1` : ''} <span class="unk">무순위·잔여세대</span></div>` : c ? `<div class="meta">일반공급 ${fmtN(c.supply)}세대 · 1순위 신청 ${fmtN(c.r1)}건 · 2순위 신청 ${fmtN(c.r2)}건${c.avg1 != null ? ` · 1순위 평균 ${c.avg1}:1` : ''}${c.shortUnits ? ` · 미달 ${fmtN(c.shortUnits)}세대` : ''} <span class="unk">주택형별 신청건수 미보관</span></div>` : '<div class="meta">경쟁률 자료 없음</div>'}`;
 }

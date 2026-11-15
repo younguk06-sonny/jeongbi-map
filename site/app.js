@@ -335,7 +335,11 @@ async function loadNear(code) {
   return S.near[code];
 }
 async function loadCh(sido) {
-  if (!S.ch[sido]) S.ch[sido] = getJSON(`data/cheongyak/${encodeURIComponent(sido)}.json`).then((d) => d.items || []).catch(() => []);
+  if (!S.ch[sido]) S.ch[sido] = Promise.all([
+    getJSON(`data/cheongyak/${encodeURIComponent(sido)}.json`).then((d) => d.items || []).catch(() => []),
+    // 무순위·잔여세대: 원 분양과 관리번호가 겹칠 수 있어 id 앞에 R을 붙임
+    getJSON(`data/remndr/${encodeURIComponent(sido)}.json`).then((d) => { S.remOk = true; return (d.items || []).map((it) => Object.assign({}, it, { id: 'R' + it.id, rem: true })); }).catch(() => { S.remOk = S.remOk || false; return []; }),
+  ]).then(([a, b]) => a.concat(b));
   return S.ch[sido];
 }
 
@@ -416,7 +420,7 @@ async function analyze(s) {
 
 // 반경 안 단지 요약 (대표값과 근거 화면이 같은 계산을 씀)
 const SALE_FROM = `${THIS_YEAR - 2}-01-01`; // 최근 분양 집계 시작일(공고일 기준)
-const chKindOf = (it) => (/임대/.test(it.kind || '') ? 'rent' : /^국민/.test(it.kind || '') ? 'pub' : 'pri');
+const chKindOf = (it) => (it.rem ? 'rem' : /임대/.test(it.kind || '') ? 'rent' : /^국민/.test(it.kind || '') ? 'pub' : 'pri');
 const CH_KINDS = [['pri', '민영분양'], ['pub', '공공분양'], ['rent', '임대'], ['rem', '잔여세대']];
 function saleOf(it) { // 단지 하나의 전용 평당 분양가 (주택형별 최고 분양가 ÷ 전용면적, 세대수 가중)
   let n = 0, s = 0; for (const t of it.types || []) if (t[0] && t[2]) { const k = t[3] || 1; n += k; s += (t[2] / (t[0] / 3.3058)) * k; }
@@ -430,10 +434,11 @@ function summary() {
   const all = w(inR), nw = w(nwArr);
   const chs = (an.ch || []).filter((it) => it.d <= settings.chRadius);
   const win = chs.filter((it) => it.date >= SALE_FROM);
-  const used = win.filter((it) => chKindOf(it) !== 'rent').map((it) => ({ it, s: saleOf(it) })).filter((x) => x.s);
+  const newSale = (it) => chKindOf(it) === 'pri' || chKindOf(it) === 'pub'; // 임대·무순위/잔여세대(재공급)는 제외
+  const used = win.filter(newSale).map((it) => ({ it, s: saleOf(it) })).filter((x) => x.s);
   let sn = 0, ss = 0; for (const x of used) { sn += x.s.n; ss += x.s.v * x.s.n; }
   const sale = sn ? ss / sn : null;
-  return { inR, nwArr, all, nw, sale, saleN: sn, saleUsed: used, saleRent: win.filter((it) => chKindOf(it) === 'rent'), saleNoType: win.filter((it) => chKindOf(it) !== 'rent' && !saleOf(it)), chs };
+  return { inR, nwArr, all, nw, sale, saleN: sn, saleUsed: used, saleRent: win.filter((it) => chKindOf(it) === 'rent'), saleRem: win.filter((it) => chKindOf(it) === 'rem'), saleNoType: win.filter((it) => newSale(it) && !saleOf(it)), chs };
 }
 function tradeWindow() { // 실거래 12개월 집계 기간
   const to = S.meta?.tradeTo; if (!to) return '최근 12개월';
@@ -577,7 +582,7 @@ function supplyHTML() {
   const sm = summary();
   const list = sm.chs.filter(chPass);
   const up = list.filter((it) => it.winner >= TODAY).sort((a, b) => a.rcept.localeCompare(b.rcept));
-  const moveIn = list.filter((it) => it.mvn && it.mvn >= NOW_YM && it.winner < TODAY).sort((a, b) => a.mvn.localeCompare(b.mvn));
+  const moveIn = list.filter((it) => !it.rem && it.mvn && it.mvn >= NOW_YM && it.winner < TODAY).sort((a, b) => a.mvn.localeCompare(b.mvn));
   const past = list.filter((it) => it.winner < TODAY).sort((a, b) => b.date.localeCompare(a.date));
   const mvSum = moveIn.reduce((a, it) => a + (it.total || 0), 0);
   const head = `<div class="tools"><div class="seg"><span class="lbl">반경</span>${CH_RADII.map((r) => `<button data-chr="${r}" class="${r === settings.chRadius ? 'on' : ''}">${fmtR(r)}</button>`).join('')}</div>${chFilterHTML(sm.chs)}</div>`

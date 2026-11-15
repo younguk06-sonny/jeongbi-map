@@ -13,7 +13,7 @@ const genOf = (it) => (it.comp && it.comp.supply != null ? { v: it.comp.supply, 
 function compHTML(sm) {
   const s = S.sel; if (!s || s.zone || s.sale || s.cx) return '';
   const pm = CP.db[s.id] || '';
-  const notices = sm.chs.filter((it) => chKindOf(it) !== 'rent' && it.rcept);
+  const notices = sm.chs.filter((it) => (chKindOf(it) === 'pri' || chKindOf(it) === 'pub') && it.rcept); // 임대·무순위/잔여세대는 신규 공급이 아니라 제외
   const head = `<div class="cp"><div class="cp-h"><b>⚔️ 분양 경쟁 비교</b><span class="meta">반경 ${fmtR(settings.chRadius)}(청약) · ${fmtR(settings.radius)}(정비사업)</span></div>
     <label class="cp-in">본건 예상 분양월 <input type="month" class="input" data-cpm="1" value="${esc(pm)}"><small>이 기기에만 저장 · 공개 데이터에 넣지 않아요</small></label>`;
   // 정비사업: 분양월 자료가 없으므로 미확인으로만 (관리처분·착공 단계는 분양이 가까울 수 있어 따로 표시)
@@ -37,7 +37,7 @@ function compHTML(sm) {
       return `<tr><td>${esc(it.name)}<small>${esc(it.kind || '')} · ${fmtDist(it.d)}</small></td><td class="num">${fmtDate(it.rcept)}</td><td class="num">${diff === 0 ? '같은 달' : diff > 0 ? diff + '개월 후' : -diff + '개월 전'}</td><td class="num">${g ? fmtN(g.v) + `<small>${g.l}</small>` : '<span class="unk">미확인</span>'}</td><td>${cpTag('notice')}</td></tr>`;
     }).join('')}</tbody></table>` : '<div class="meta">전후 12개월 안에 공고된 분양이 없어요. (아직 공고 전인 사업은 자료에 없어요)</div>'}
     ${nbBlock}
-    <div class="meta">공고 확정: 청약홈 입주자모집공고(접수일 기준, 임대 제외). 일반분양은 단지 경쟁률 자료의 일반공급 세대, 없으면 주택형별 일반+특별 합계로 표시해요.</div></div>`;
+    <div class="meta">공고 확정: 청약홈 입주자모집공고(접수일 기준, 임대·무순위/잔여세대 제외). 일반분양은 단지 경쟁률 자료의 일반공급 세대, 없으면 주택형별 일반+특별 합계로 표시해요.</div></div>`;
 }
 document.addEventListener('change', (e) => {
   const t = e.target.closest('[data-cpm]'); if (!t || !S.sel) return;
