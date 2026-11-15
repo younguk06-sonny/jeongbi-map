@@ -6,13 +6,23 @@
 <title>정비맵 - 사업장 주변 시세·청약</title>
 <meta name="description" content="정비사업장을 지도에서 고르면 주변 아파트 실거래 시세·평당가, 청약 일정, 공급 예정 단지를 한 번에 봅니다.">
 <meta name="theme-color" content="#f3f5f8">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="정비맵">
+<meta property="og:title" content="정비맵 - 정비사업장 주변 시세·청약">
+<meta property="og:description" content="사업장을 고르면 주변 정비사업 진행 단계, 아파트 실거래 평당가, 청약·공급 일정을 지도에서 한 번에 봐요.">
+<meta property="og:url" content="https://younguk06-sonny.github.io/jeongbi-map/">
+<meta property="og:image" content="https://younguk06-sonny.github.io/jeongbi-map/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="정비맵 - 정비사업장 주변 시세·청약">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="정비맵">
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=23">
 </head>
 <body>
 
@@ -26,6 +36,7 @@
         <span class="where"><b id="where">지역 선택</b><small>시도·시군구·구역·단지 검색</small></span>
         <i>🔍</i>
       </button>
+      <button class="ibtn" id="btnShare" title="공유하기" aria-label="공유하기">📤</button>
       <button class="ibtn" id="btnSet" title="설정">⚙️</button>
     </div>
     <div class="ftabs" id="ftabs">
@@ -105,8 +116,15 @@
 
 <div class="modal" id="modal"><div class="box" id="modalBox"></div></div>
 <div class="toast" id="toast"></div>
+<div class="exitdlg" id="exitDlg" role="dialog" aria-modal="true" aria-labelledby="exTitle">
+  <div class="exbox">
+    <img src="icons/icon-192.png" alt="" class="exicon">
+    <div class="extitle" id="exTitle">정비맵을 종료하시겠습니까?</div>
+    <div class="exbtns"><button class="btn" id="exNo">아니요</button><button class="btn p" id="exYes">예</button></div>
+  </div>
+</div>
 
-<script src="app.js?v=19"></script>
+<script src="app.js?v=20"></script>
 <script src="zones.js?v=24"></script>
 <script src="newtown.js?v=4"></script>
 <script src="gg.js?v=2"></script>
@@ -119,5 +137,6 @@
 <script src="nearby.js?v=1"></script>
 <script src="basis.js?v=2"></script>
 <script src="compete.js?v=2"></script>
+<script src="ux.js?v=1"></script>
 </body>
 </html>

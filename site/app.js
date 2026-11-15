@@ -138,7 +138,7 @@ async function init() {
   pricesInit();
   const id = decodeURIComponent((location.hash.match(/site=([^&]+)/) || [])[1] || '');
   if (id && S.sites.find((s) => s.id === id)) selectSite(id); else fitAll();
-  addEventListener('hashchange', () => { const m = location.hash.match(/site=([^&]+)/); if (m && decodeURIComponent(m[1]) !== S.sel?.id) selectSite(decodeURIComponent(m[1])); });
+  addEventListener('hashchange', () => { if (typeof BK !== 'undefined' && BK.ignoreHash) return; const m = location.hash.match(/site=([^&]+)/); if (m && decodeURIComponent(m[1]) !== S.sel?.id) selectSite(decodeURIComponent(m[1])); });
 }
 
 function bindUI() {
@@ -147,6 +147,7 @@ function bindUI() {
   $('#handle').addEventListener('click', () => setSheet($('#sheet').classList.contains('open') ? 'show' : 'open'));
   $('#shHead').addEventListener('click', (e) => { if (e.target.closest('.x')) return closeSite(); const kb = e.target.closest('[data-basis]'); if (kb) return openBasis(kb.dataset.basis); if (!$('#sheet').classList.contains('open')) setSheet('open'); });
   $('#btnSet').addEventListener('click', openSettings);
+  if (typeof uxInit === 'function') uxInit();
   $('#ftabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; if (PRICE_MODES[b.dataset.p]) priceTab(b.dataset.p); else openTab(b.dataset.p); });
   regionBind();
   $('#btnMe').addEventListener('click', locateMe);
@@ -846,7 +847,8 @@ function openSettings() {
     <div class="field"><label>카카오 JavaScript 키 (선택)</label><input class="input" id="setKey" value="${esc(settings.kakaoKey)}" placeholder="비워두면 앱 기본 키 사용" autocomplete="off"></div>
     <div class="field"><label>찾아 둔 위치</label><div class="meta" style="margin-bottom:8px">단지·청약 위치 ${Object.keys(Geo.db).length.toLocaleString()}곳을 이 기기에 저장해 두었어요. 위치가 이상하면 지우고 다시 찾게 할 수 있어요.</div><button class="btn sm" id="setClear">찾아 둔 위치 지우기</button></div>
     <div class="note">자료: 국토교통부 아파트 매매 실거래가(${m ? fmtYm(m.tradeFrom) + '~' + fmtYm(m.tradeTo) : '-'}), 한국부동산원 청약홈 분양정보·경쟁률 — 분양시장 레이더가 매일 07:17 수집, 이 앱은 매일 08:07 갱신${m ? ` (마지막 ${esc(m.builtAt)})` : ''}. 평당가는 전용면적 기준이에요.</div>
-    <div class="btns"><button class="btn p" id="setSave" style="flex:1;justify-content:center">저장</button></div>`);
+    <div class="btns"><button class="btn" id="setGuide">📖 사용 방법</button><button class="btn p" id="setSave" style="flex:1;justify-content:center">저장</button></div>`);
+  $('#setGuide').onclick = () => openGuide(false);
   const pick = (id, key) => { $(id).onclick = (e) => { const b = e.target.closest('button'); if (!b) return; settings[key] = +b.dataset.r; $$(id + ' button').forEach((x) => x.classList.toggle('on', x === b)); }; };
   pick('#setR', 'radius'); pick('#setC', 'chRadius');
   $('#setClear').onclick = () => { Geo.db = {}; LS.set('geo', {}); toast('찾아 둔 위치를 지웠어요'); closeModal(); if (S.sel) selectSite(S.sel.id); };
